@@ -196,7 +196,7 @@ const initialState = {
   isMicMuted: false,
   isSpeakerMuted: false,
   selectedVoiceId: "local_female" as string | null,
-  sttLanguage: "en-US",
+  sttLanguage: "en-IN",
   voiceInputMode: "manual" as const,
   isStreaming: false,
   layoutMode: layoutPrefs.layoutMode,

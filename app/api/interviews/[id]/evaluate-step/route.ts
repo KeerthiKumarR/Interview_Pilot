@@ -30,7 +30,16 @@ export async function POST(
     const expectedRubric = (question.expectedRubric as string[]) || [];
     const isRetry = retryCount > 0;
 
-    // Run evaluation
+    // Load recent conversation history for context continuity
+    const recentMessages = await prisma.message.findMany({
+      where: { interviewId },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: { role: true, content: true },
+    }).catch(() => []);
+    recentMessages.reverse();
+
+    // Run evaluation with conversational history
     const evaluation = await evaluateAnswerRubric({
       questionTitle: question.title,
       questionPrompt: question.promptText,
@@ -41,10 +50,30 @@ export async function POST(
       category: question.category,
       options: (question.options as string[]) || null,
       correctOption: question.correctOption,
+      recentConversation: recentMessages,
     });
 
     // Check if should advance
     const shouldAdvance = evaluation.isSatisfactory || retryCount >= question.maxProbes;
+
+    // Persist messages to DB for transcript replay & report generation
+    await prisma.message.create({
+      data: {
+        interviewId,
+        role: "user",
+        content: candidateAnswer,
+      },
+    }).catch((err) => console.warn("Failed to persist user message:", err));
+
+    if (evaluation.spokenFeedback) {
+      await prisma.message.create({
+        data: {
+          interviewId,
+          role: "assistant",
+          content: evaluation.spokenFeedback,
+        },
+      }).catch((err) => console.warn("Failed to persist assistant message:", err));
+    }
 
     // Save step evaluation in DB
     try {
@@ -64,11 +93,12 @@ export async function POST(
       console.warn("Failed to save step evaluation to DB:", dbErr);
     }
 
-    // Find next question if advancing
+    // Find next question strictly within the SAME job role (or default pool if null)
     let nextQuestion = null;
     if (shouldAdvance) {
       nextQuestion = await prisma.interviewQuestion.findFirst({
         where: {
+          jobRoleId: question.jobRoleId ?? null,
           order: { gt: question.order },
           isActive: true,
         },

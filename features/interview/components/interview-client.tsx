@@ -1112,12 +1112,6 @@ export function InterviewClient({
         </div>
       )}
 
-      {/* Hidden inputs always mounted for speech / chat stream continuity */}
-      <div style={{ display: "none" }}>
-        <TextInput sendMessage={handleSendMessage} stopGeneration={handleStopGeneration} />
-        <VoiceInput sendMessage={handleSendMessage} stopGeneration={handleStopGeneration} />
-        <VoiceControls />
-      </div>
 
       <InterviewStageShell
         interview={interview}

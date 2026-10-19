@@ -173,13 +173,11 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
       }
     }
 
-    // Draw the template diagram
-    drawDefaultDiagram(ctx, canvas.width, canvas.height);
-
+    // Leave canvas completely clean for the candidate to sketch
     const initialSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
     setHistory([initialSnapshot]);
     setHistoryIndex(0);
-  }, [bgColor, dotColor, drawDefaultDiagram]);
+  }, [bgColor, dotColor]);
 
   useEffect(() => {
     resizeCanvas();
@@ -248,6 +246,16 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
         ctx.fill();
       }
     }
+    saveHistory();
+  };
+
+  const handleLoadTemplate = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    handleClear();
+    drawDefaultDiagram(ctx, canvas.width, canvas.height);
     saveHistory();
   };
 
@@ -446,14 +454,26 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
           System Design Whiteboard
         </div>
 
-        <button
-          type="button"
-          onClick={handleClear}
-          className="pointer-events-auto flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition cursor-pointer shadow-md backdrop-blur-md"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          <span>Clear Canvas</span>
-        </button>
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleLoadTemplate}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary hover:border-primary/40 transition cursor-pointer shadow-md backdrop-blur-md"
+            title="Load starter architecture diagram template"
+          >
+            <Layout className="h-3.5 w-3.5 text-primary" />
+            <span>Load Template</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClear}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card/90 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:border-destructive/30 hover:text-destructive transition cursor-pointer shadow-md backdrop-blur-md"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Clear Canvas</span>
+          </button>
+        </div>
       </div>
 
       {/* ─── BOTTOM-LEFT ZOOM WIDGET ─── */}

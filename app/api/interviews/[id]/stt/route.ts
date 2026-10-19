@@ -16,46 +16,90 @@ export async function POST(
       );
     }
 
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_STT_MODEL || "deepgram/nova-3";
+    // 1. Try ultra-fast, high-accuracy Groq Whisper if available
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (groqApiKey) {
+      try {
+        const groqFormData = new FormData();
+        groqFormData.append("file", file, "audio.webm");
+        groqFormData.append("model", "whisper-large-v3-turbo");
+        groqFormData.append("temperature", "0");
+        groqFormData.append("language", "en");
 
-    if (!openRouterApiKey) {
+        const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${groqApiKey}`,
+          },
+          body: groqFormData,
+        });
+
+        if (groqRes.ok) {
+          const data = await groqRes.json();
+          if (data.text) {
+            return NextResponse.json({ text: data.text });
+          }
+        } else {
+          const errText = await groqRes.text();
+          console.warn("Groq STT returned non-OK:", groqRes.status, errText);
+        }
+      } catch (err) {
+        console.warn("Groq STT call error, falling back:", err);
+      }
+    }
+
+    // 2. Fallback to OpenRouter Speech-to-Text (requires base64 JSON payload)
+    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+    const model = process.env.OPENROUTER_STT_MODEL || "openai/whisper-large-v3";
+
+    if (!openRouterApiKey && !groqApiKey) {
       return NextResponse.json(
-        { error: "OpenRouter API Key not configured" },
+        { error: "No STT provider (Groq or OpenRouter) configured" },
         { status: 500 }
       );
     }
 
-    const sttFormData = new FormData();
-    sttFormData.append("file", file, "audio.webm");
-    sttFormData.append("model", model);
-    // Optional: add language parameter if needed in the future
+    if (openRouterApiKey) {
+      try {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const base64Audio = buffer.toString("base64");
 
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/audio/transcriptions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openRouterApiKey}`,
-        },
-        body: sttFormData,
+        const response = await fetch(
+          "https://openrouter.ai/api/v1/audio/transcriptions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${openRouterApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              input_audio: {
+                data: base64Audio,
+                format: "webm",
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          return NextResponse.json({
+            text: data.text || "",
+          });
+        }
+
+        const errorText = await response.text();
+        console.error("OpenRouter STT error:", response.status, errorText);
+      } catch (err) {
+        console.error("OpenRouter STT fetch error:", err);
       }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter STT error:", response.status, errorText);
-      return NextResponse.json(
-        { error: "Speech-to-text failed" },
-        { status: response.status }
-      );
     }
 
-    const data = await response.json();
-    
-    return NextResponse.json({
-      text: data.text || "",
-    });
+    return NextResponse.json(
+      { error: "Speech-to-text service unavailable" },
+      { status: 502 }
+    );
   } catch (error) {
     console.error("Error in STT route:", error);
     return NextResponse.json(

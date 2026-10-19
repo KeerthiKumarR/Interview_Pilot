@@ -84,6 +84,7 @@ export function InterviewStageShell({
   const problemTitle = useInterviewStore((s) => s.problemTitle);
   const aiState = useInterviewStore((s) => s.aiState);
   const selectedVoiceId = useInterviewStore((s) => s.selectedVoiceId);
+  const sttLanguage = useInterviewStore((s) => s.sttLanguage);
 
   const interviewerName = useMemo(() => {
     const map: Record<string, string> = {
@@ -187,7 +188,13 @@ export function InterviewStageShell({
   const { startListening, stopListening, isSupported: isSpeechSupported } = useWebSpeech({
     interimResults: true,
     continuous: true,
-    language: "en-US",
+    language: sttLanguage || "en-IN",
+    onError: (err) => {
+      console.warn("[StageShell] Speech recognition event:", err);
+      if (err === "not-allowed") {
+        setLiveSpeech("Microphone access blocked. Please check browser permissions.");
+      }
+    },
     onInterimResult: (interim) => {
       if (aiState === "speaking" || aiState === "thinking") return;
       setLiveInterim(interim);

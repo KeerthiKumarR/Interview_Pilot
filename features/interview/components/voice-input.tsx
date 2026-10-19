@@ -44,6 +44,10 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Speech Debounce Refs
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechAccumulatorRef = useRef<string>("");
+
   // ─── Volume Visualizer ─────────────────────────
 
   const stopVolumeVisualizer = useCallback(() => {
@@ -260,7 +264,30 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
   const handleSpeechResult = useCallback(
     (transcript: string) => {
       if (!transcript.trim()) return;
-      sendMessage(transcript);
+      const prev = speechAccumulatorRef.current.trim();
+      const curr = transcript.trim();
+      let combined = curr;
+      if (prev) {
+        if (prev.toLowerCase() === curr.toLowerCase() || prev.toLowerCase().endsWith(curr.toLowerCase())) {
+          combined = prev;
+        } else if (curr.toLowerCase().startsWith(prev.toLowerCase())) {
+          combined = curr;
+        } else {
+          combined = `${prev} ${curr}`;
+        }
+      }
+      speechAccumulatorRef.current = combined;
+
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      silenceTimeoutRef.current = setTimeout(() => {
+        const textToSend = speechAccumulatorRef.current.trim();
+        speechAccumulatorRef.current = "";
+        if (textToSend.length >= 2) {
+          sendMessage(textToSend);
+        }
+      }, 1500);
     },
     [sendMessage]
   );

@@ -95,6 +95,10 @@ export async function POST(req: Request, context: RouteContext) {
       executionResult,
       timeRemainingSeconds,
       voiceId,
+      currentStage,
+      currentQuestionTitle,
+      currentQuestionPrompt,
+      currentCategory,
     } = body;
 
     if (!message || typeof message !== "string") {
@@ -207,6 +211,10 @@ export async function POST(req: Request, context: RouteContext) {
       multiplePeopleCount: dbMultiplePeople,
       hintCount: dbHintCount,
       isViva,
+      currentStage: typeof currentStage === "number" ? currentStage : undefined,
+      currentQuestionTitle: typeof currentQuestionTitle === "string" ? currentQuestionTitle : undefined,
+      currentQuestionPrompt: typeof currentQuestionPrompt === "string" ? currentQuestionPrompt : undefined,
+      currentCategory: typeof currentCategory === "string" ? currentCategory : undefined,
     });
 
     // Load candidate's career profile & projects to enable personalized interview questions (cached 60s)

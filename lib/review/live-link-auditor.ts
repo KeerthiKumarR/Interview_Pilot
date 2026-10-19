@@ -83,24 +83,53 @@ export async function auditLiveLinks(
     const startTime = Date.now();
 
     try {
+      const browserUA =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+      // 15-second primary timeout (ample time for Vercel/Render free tier cold starts)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const res = await fetch(targetUrl, {
-        method: "GET",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 MiraiCopilot-Auditor",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-        signal: controller.signal,
-        redirect: "follow",
-      });
+      let res: Response;
+      let latencyMs = 0;
 
-      clearTimeout(timeoutId);
-      const latencyMs = Date.now() - startTime;
+      try {
+        res = await fetch(targetUrl, {
+          method: "GET",
+          headers: {
+            "User-Agent": browserUA,
+            Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        clearTimeout(timeoutId);
+        latencyMs = Date.now() - startTime;
+      } catch (firstErr: any) {
+        clearTimeout(timeoutId);
+        // If aborted due to cold start, give a secondary 8s warm retry
+        if (firstErr?.name === "AbortError") {
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 8000);
+          const retryStart = Date.now();
+
+          res = await fetch(targetUrl, {
+            method: "GET",
+            headers: {
+              "User-Agent": browserUA,
+              Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+            signal: retryController.signal,
+            redirect: "follow",
+          });
+          clearTimeout(retryTimeoutId);
+          latencyMs = Date.now() - retryStart;
+        } else {
+          throw firstErr;
+        }
+      }
+
       totalLatency += latencyMs;
-
       const isAlive = res.status >= 200 && res.status < 400;
       const hosting = detectHosting(targetUrl, res.headers);
 
@@ -144,7 +173,7 @@ export async function auditLiveLinks(
       const isTimeout = err?.name === "AbortError";
 
       actionableFixes.push(
-        `Live link for "${proj.title}" is unreachable (${isTimeout ? "Timed out after 8s" : "Network error"}).`
+        `Live link for "${proj.title}" is unreachable (${isTimeout ? "Timed out after 15s cold start" : "Network error"}).`
       );
 
       linkDetails.push({
@@ -154,7 +183,7 @@ export async function auditLiveLinks(
         statusCode: null,
         latencyMs,
         message: isTimeout
-          ? "Request timed out after 8 seconds (Free-tier cold start or offline)."
+          ? "Request timed out after 15 seconds (Free-tier cold start or offline)."
           : `Connection failed: ${err.message || "Unreachable host"}`,
         fix: "Verify domain DNS records and ensure the deployment service is active.",
       });

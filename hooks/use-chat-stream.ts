@@ -212,6 +212,10 @@ export function useChatStream(options: UseChatStreamOptions) {
               executionResult: lastExecResultRef.current,
               timeRemainingSeconds: store.timeRemainingSeconds,
               voiceId: store.selectedVoiceId,
+              currentStage: store.currentQuestionIndex + 1,
+              currentQuestionTitle: store.currentQuestion?.title || null,
+              currentQuestionPrompt: store.currentQuestion?.promptText || null,
+              currentCategory: store.activeCategory,
             }),
           }
         );

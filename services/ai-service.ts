@@ -686,7 +686,25 @@ export function buildInterviewerSystemPrompt(config: {
   multiplePeopleCount?: number;
   hintCount?: number;
   isViva?: boolean;
+  currentStage?: number;
+  currentQuestionTitle?: string | null;
+  currentQuestionPrompt?: string | null;
+  currentCategory?: string | null;
 }): string {
+  // Build active stage context to keep the AI anchored on what part the candidate is on
+  let stageContext = "";
+  if (config.currentQuestionTitle || config.currentStage) {
+    stageContext = `
+ACTIVE INTERVIEW STAGE & TOPIC FOCUS:
+- Current Stage / Part: Stage ${config.currentStage || 1}${config.currentQuestionTitle ? `: ${config.currentQuestionTitle}` : ""}
+${config.currentQuestionPrompt ? `- Focus Objective: "${config.currentQuestionPrompt}"` : ""}
+${config.currentCategory ? `- Stage Modality: ${config.currentCategory}` : ""}
+CRITICAL CONTEXT INSTRUCTION:
+- You are strictly conducting this specific stage of the interview right now.
+- Keep your questions, hints, and feedback focused on this active stage. Do not confuse this with other stages or reset your conversational context.
+`;
+  }
+
   // Build time-awareness context
   let timeContext = "";
   if (typeof config.timeRemainingSeconds === "number") {
@@ -786,6 +804,7 @@ VIVA INTERVIEW CONTEXT:
 - Target Duration: ${config.duration} minutes
 ${timeContext}
 ${proctoringContext}
+${stageContext}
 
 STRUCTURED 4-STAGE VIVA OBJECTIVES:
 You are actively guiding the candidate across these 4 evaluation stages:
@@ -881,6 +900,7 @@ INTERVIEW CONTEXT:
 ${styleInstructions}
 ${timeContext}
 ${proctoringContext}
+${stageContext}
 
 PROBLEM DETAILS:
 ${config.problemDescription}
@@ -1003,8 +1023,9 @@ export async function evaluateAnswerRubric(params: {
   category?: string;
   options?: string[] | null;
   correctOption?: number | null;
+  recentConversation?: Array<{ role: string; content: string }>;
 }): Promise<RubricEvaluationResult> {
-  const { questionTitle, questionPrompt, expectedRubric, secondaryProbe, candidateAnswer, isRetry, category, options, correctOption } = params;
+  const { questionTitle, questionPrompt, expectedRubric, secondaryProbe, candidateAnswer, isRetry, category, options, correctOption, recentConversation } = params;
 
   // Option Quiz Direct Evaluation
   if (category === "option_quiz" && typeof correctOption === "number" && Array.isArray(options)) {
@@ -1054,13 +1075,11 @@ export async function evaluateAnswerRubric(params: {
     };
   }
 
+  const historyContext = (recentConversation && recentConversation.length > 0)
+    ? `\nRecent Conversation History:\n${recentConversation.map(m => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: "${m.content}"`).join("\n")}\n`
+    : "";
+
   const prompt = `You are an expert technical interviewer evaluating a candidate's answer for the question: "${questionTitle}".
-
-Question Prompt:
-"${questionPrompt}"
-
-Expected Rubric Points (Key Concepts):
-${(expectedRubric || []).map((r, i) => `${i + 1}. ${r}`).join("\n")}t technical interviewer evaluating a candidate's answer for the question: "${questionTitle}".
 
 Question Prompt:
 "${questionPrompt}"
@@ -1070,8 +1089,8 @@ ${(expectedRubric || []).map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
 Secondary Probing Angle to use if answer is incomplete or confused:
 "${secondaryProbe || "Ask a gentle clarifying question to test their understanding."}"
-
-Candidate's Spoken Answer:
+${historyContext}
+Candidate's Current Spoken Answer:
 "${candidateAnswer}"
 
 ${isRetry ? "NOTE: This is the candidate's second attempt. Be lenient and acknowledge their effort before moving on." : ""}
