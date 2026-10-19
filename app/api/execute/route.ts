@@ -40,65 +40,194 @@ function setExecutionCache(key: string, result: ExecutionCacheResult) {
   executionCache.set(key, { result, expiry: Date.now() + EXECUTION_CACHE_TTL });
 }
 
+function formatArg(a: unknown): string {
+  if (a instanceof Error || (a && typeof a === "object" && "message" in a)) {
+    return (a as any).stack || (a as any).message || String(a);
+  }
+  if (typeof a === "object" && a !== null) {
+    try {
+      return JSON.stringify(a, null, 2);
+    } catch {
+      return String(a);
+    }
+  }
+  return String(a);
+}
+
+function createMockQuery(sampleData: unknown) {
+  const q: any = {
+    select: () => q,
+    skip: () => q,
+    limit: () => q,
+    sort: () => q,
+    populate: () => q,
+    lean: () => q,
+    where: () => q,
+    equals: () => q,
+    in: () => q,
+    exec: async () => sampleData,
+    then: (resolve: (v: unknown) => void, reject: (err: unknown) => void) =>
+      Promise.resolve(sampleData).then(resolve, reject),
+    catch: (reject: (err: unknown) => void) =>
+      Promise.resolve(sampleData).catch(reject),
+  };
+  return q;
+}
+
+const sampleMovies = [
+  { _id: "60c72b2f9b1d8b001c8e4d2a", title: "Inception", genre: "Sci-Fi", releaseYear: 2010, rating: 8.8, posterUrl: "https://example.com/poster1.jpg" },
+  { _id: "60c72b2f9b1d8b001c8e4d2b", title: "Interstellar", genre: "Sci-Fi", releaseYear: 2014, rating: 8.7, posterUrl: "https://example.com/poster2.jpg" },
+  { _id: "60c72b2f9b1d8b001c8e4d2c", title: "The Dark Knight", genre: "Action", releaseYear: 2008, rating: 9.0, posterUrl: "https://example.com/poster3.jpg" },
+];
+
+function createModelMock(name: string) {
+  return {
+    modelName: name,
+    find: () => createMockQuery(sampleMovies),
+    findOne: () => createMockQuery(sampleMovies[0]),
+    findById: () => createMockQuery(sampleMovies[0]),
+    findByIdAndUpdate: () => createMockQuery(sampleMovies[0]),
+    findByIdAndDelete: () => createMockQuery(sampleMovies[0]),
+    findOneAndUpdate: () => createMockQuery(sampleMovies[0]),
+    findOneAndDelete: () => createMockQuery(sampleMovies[0]),
+    countDocuments: async () => sampleMovies.length,
+    count: async () => sampleMovies.length,
+    estimatedDocumentCount: async () => sampleMovies.length,
+    create: async (data: Record<string, unknown>) => ({ _id: "60c72b2f9b1d8b001c8e4d2d", ...data }),
+    insertMany: async (data: Record<string, unknown>[]) => data,
+    updateOne: async () => ({ acknowledged: true, modifiedCount: 1 }),
+    updateMany: async () => ({ acknowledged: true, modifiedCount: 1 }),
+    deleteOne: async () => ({ acknowledged: true, deletedCount: 1 }),
+    deleteMany: async () => ({ acknowledged: true, deletedCount: 1 }),
+    aggregate: async () => sampleMovies,
+    distinct: async () => ["Sci-Fi", "Action", "Drama"],
+  };
+}
+
+const modelProxy = new Proxy({}, {
+  get(t: any, prop: string) {
+    if (typeof prop === "string" && /^[A-Z]/.test(prop)) {
+      return createModelMock(prop);
+    }
+    return t[prop];
+  },
+});
+
+const mockRedis = {
+  get: async (k: string) => null,
+  set: async (k: string, v: string, ...rest: unknown[]) => "OK",
+  setEx: async (k: string, t: number, v: string) => "OK",
+  setex: async (k: string, t: number, v: string) => "OK",
+  del: async (k: string) => 1,
+  exists: async (k: string) => 0,
+  flushall: async () => "OK",
+  on: () => {},
+  connect: async () => {},
+  disconnect: async () => {},
+};
+
+const mockMongoose = {
+  Schema: class {
+    static Types = { ObjectId: String };
+  },
+  model: (name: string) => modelProxy[name] || createModelMock(name),
+  models: modelProxy,
+  connect: async () => {},
+  connection: { on: () => {}, once: () => {} },
+  Types: { ObjectId: (id?: string) => id || "60c72b2f9b1d8b001c8e4d2a" },
+};
+
+const mockRequire = (mod: string) => {
+  if (mod === "mongoose") return mockMongoose;
+  if (mod === "redis" || mod === "ioredis") {
+    return { createClient: () => mockRedis };
+  }
+  if (mod === "express") {
+    const expressApp = () => ({
+      use: () => {},
+      get: () => {},
+      post: () => {},
+      put: () => {},
+      delete: () => {},
+      listen: () => {},
+    });
+    expressApp.json = () => () => {};
+    expressApp.urlencoded = () => () => {};
+    expressApp.Router = () => expressApp();
+    return expressApp;
+  }
+  return {};
+};
+
 /**
  * Executes JavaScript/TypeScript in a safe Node.js VM sandbox.
  * Supports Express/Node handlers, Redis/MongoDB mocks, and standard I/O.
  */
-function executeNodeSandbox(sourceCode: string): ExecutionCacheResult {
+async function executeNodeSandbox(sourceCode: string): Promise<ExecutionCacheResult> {
   const logs: string[] = [];
   const errors: string[] = [];
 
   const customConsole = {
-    log: (...args: unknown[]) =>
-      logs.push(args.map((a) => (typeof a === "object" ? JSON.stringify(a, null, 2) : String(a))).join(" ")),
-    info: (...args: unknown[]) =>
-      logs.push(args.map((a) => (typeof a === "object" ? JSON.stringify(a, null, 2) : String(a))).join(" ")),
-    warn: (...args: unknown[]) =>
-      logs.push(args.map((a) => (typeof a === "object" ? JSON.stringify(a, null, 2) : String(a))).join(" ")),
-    error: (...args: unknown[]) =>
-      errors.push(args.map((a) => (typeof a === "object" ? JSON.stringify(a, null, 2) : String(a))).join(" ")),
+    log: (...args: unknown[]) => logs.push(args.map(formatArg).join(" ")),
+    info: (...args: unknown[]) => logs.push(args.map(formatArg).join(" ")),
+    warn: (...args: unknown[]) => logs.push(args.map(formatArg).join(" ")),
+    error: (...args: unknown[]) => errors.push(args.map(formatArg).join(" ")),
   };
 
-  // Strip module import/export keywords for VM evaluation
+  // Strip module import/export keywords and basic TypeScript type annotations for VM evaluation
   let executableCode = sourceCode
-    .replace(/^import\s+.*?from\s+['"].*?['"];?/gm, "")
-    .replace(/^export\s+(async\s+function|function|const|let|var|class)/gm, "$1")
-    .replace(/^export\s+default\s+/gm, "");
+    .replace(/^\s*import\s+.*?from\s+['"].*?['"];?/gm, "")
+    .replace(/\bexport\s+default\s+/g, "")
+    .replace(/\bexport\s+(async\s+function|function|const|let|var|class)/g, "$1")
+    .replace(/:\s*(string|number|boolean|any|void|object|Promise<[^>]+>|Record<[^>]+>|Request|Response|NextFunction|NextApiRequest|NextApiResponse)(\[\])?/g, "")
+    .replace(/interface\s+\w+\s*\{[^}]*\}/g, "")
+    .replace(/type\s+\w+\s*=\s*[^;]+;/g, "");
 
   // If candidate wrote an Express/Node handler (like handleProjectRequest), auto-invoke with mock req/res!
-  if (/async\s+function\s+handleProjectRequest|function\s+handleProjectRequest/.test(executableCode)) {
+  if (/\bhandleProjectRequest\b/.test(executableCode)) {
     executableCode += `
-;(async () => {
+__sandboxPromise__ = (async () => {
   try {
-    const mockReq = { body: {}, query: {}, params: { id: "60c72b2f9b1d8b001c8e4d2a" }, headers: {} };
+    const mockReq = {
+      query: { genre: "Sci-Fi", page: "1", limit: "10", search: "" },
+      params: { id: "60c72b2f9b1d8b001c8e4d2a", movieId: "60c72b2f9b1d8b001c8e4d2a" },
+      body: { title: "Movie adda", genre: "Sci-Fi", rating: 8.8 },
+      headers: { authorization: "Bearer mock_jwt_token", "content-type": "application/json" },
+      method: "GET",
+      url: "/api/movies?page=1&limit=10"
+    };
+    let responseCaptured = false;
     const mockRes = {
       statusCode: 200,
       status(code) { this.statusCode = code; return this; },
-      json(data) { console.log("Response (" + this.statusCode + "):", JSON.stringify(data, null, 2)); return this; },
-      send(data) { console.log("Response:", data); return this; }
-    };
-    const mockRedis = {
-      get: async (k) => null,
-      set: async (k, v, opt) => "OK",
-      setEx: async (k, t, v) => "OK"
-    };
-    const mockMovie = {
-      findById: (id) => ({
-        lean: async () => ({ _id: id || "60c72b2f9b1d8b001c8e4d2a", title: "Movie adda", year: 2024, cached: false })
-      })
+      json(data) {
+        responseCaptured = true;
+        console.log("✓ HTTP " + this.statusCode + " Response:\\n" + JSON.stringify(data, null, 2));
+        return this;
+      },
+      send(data) {
+        responseCaptured = true;
+        console.log("✓ HTTP " + this.statusCode + " Response:", typeof data === "object" ? JSON.stringify(data, null, 2) : data);
+        return this;
+      },
+      setHeader() { return this; },
+      end() { return this; }
     };
 
-    if (typeof redisClient === "undefined") globalThis.redisClient = mockRedis;
-    if (typeof Movie === "undefined") globalThis.Movie = mockMovie;
-    if (typeof movieId === "undefined") globalThis.movieId = "60c72b2f9b1d8b001c8e4d2a";
-    if (typeof cacheKey === "undefined") globalThis.cacheKey = "movie:60c72b2f9b1d8b001c8e4d2a";
+    const handler = typeof handleProjectRequest === "function" 
+      ? handleProjectRequest 
+      : (typeof exports !== "undefined" && typeof exports.handleProjectRequest === "function") 
+        ? exports.handleProjectRequest 
+        : null;
 
-    const res = await handleProjectRequest(mockReq, mockRes);
-    if (res !== undefined && !logs.length) {
-      console.log("Returned:", JSON.stringify(res, null, 2));
+    if (handler) {
+      const res = await handler(mockReq, mockRes);
+      if (!responseCaptured && res !== undefined && res !== mockRes) {
+        console.log("Returned:", JSON.stringify(res, null, 2));
+      }
     }
   } catch (err) {
-    console.error("Handler error:", err?.message || err);
+    console.error("Handler error:", err?.stack || err?.message || err);
   }
 })();
 `;
@@ -123,6 +252,24 @@ function executeNodeSandbox(sourceCode: string): ExecutionCacheResult {
     Promise,
     Map,
     Set,
+    process: { env: { NODE_ENV: "development", PORT: 3000 } },
+    Movie: createModelMock("Movie"),
+    User: createModelMock("User"),
+    Product: createModelMock("Product"),
+    Order: createModelMock("Order"),
+    Item: createModelMock("Item"),
+    movies: sampleMovies,
+    mockRedis,
+    redis: mockRedis,
+    redisClient: mockRedis,
+    mongoose: mockMongoose,
+    cacheKey: "movie:60c72b2f9b1d8b001c8e4d2a",
+    movieId: "60c72b2f9b1d8b001c8e4d2a",
+    require: mockRequire,
+    exports: {},
+    module: { exports: {} },
+    modelProxy,
+    __sandboxPromise__: null,
   };
 
   const context = vm.createContext(sandbox);
@@ -131,10 +278,18 @@ function executeNodeSandbox(sourceCode: string): ExecutionCacheResult {
   try {
     const script = new vm.Script(executableCode);
     const result = script.runInContext(context, { timeout: 3000 });
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(3);
 
+    if (result && typeof (result as any).then === "function") {
+      await result;
+    }
+
+    if (sandbox.__sandboxPromise__) {
+      await (sandbox.__sandboxPromise__ as Promise<unknown>);
+    }
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(3);
     const isError = errors.length > 0;
-    const finalStdout = logs.join("\n") || (result !== undefined ? String(result) : "✓ Execution completed successfully (no console output).");
+    const finalStdout = logs.join("\n") || (result !== undefined && !(result instanceof Promise) ? String(result) : "✓ Execution completed successfully (no console output).");
 
     return {
       stdout: finalStdout,
@@ -186,7 +341,7 @@ export async function POST(req: Request) {
     // ─── 1. Instant Native Node VM Execution for JavaScript / TypeScript ───
     if (language === "javascript" || language === "typescript") {
       try {
-        const vmResult = executeNodeSandbox(sourceCode);
+        const vmResult = await executeNodeSandbox(sourceCode);
         setExecutionCache(cacheKey, vmResult);
         return NextResponse.json({ result: vmResult });
       } catch (vmErr) {
