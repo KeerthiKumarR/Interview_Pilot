@@ -1,0 +1,409 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id         String      @id @default(uuid())
+  clerkId    String      @unique
+  email      String      @unique
+  name       String?
+  imageUrl   String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  feedbacks       Feedback[]
+  interviews      Interview[]
+  studentProfile  StudentProfile?
+  jobApplications JobApplication[]
+
+  @@index([clerkId])
+}
+
+model Interview {
+  id                 String     @id @default(uuid())
+  userId             String
+  language           String
+  difficulty         String
+  duration           Int
+  status             String
+  problemTitle       String
+  problemDescription String
+  code               String
+  startedAt          DateTime?
+  endedAt            DateTime?
+  createdAt          DateTime   @default(now())
+  style              String     @default("standard")
+  outOfFrameCount    Int        @default(0)
+  tabSwitchCount     Int        @default(0)
+  multiplePeopleCount Int       @default(0)
+  jobRoleId          String?
+  errorLogs          ErrorLog[]
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobRole            JobRole?   @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  messages           Message[]
+  report             Report?
+
+  @@index([userId])
+  @@index([jobRoleId])
+}
+
+model Message {
+  id          String    @id @default(uuid())
+  interviewId String
+  role        String
+  content     String
+  createdAt   DateTime  @default(now())
+  thinking    String?
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+}
+
+model Report {
+  id                    String    @id @default(uuid())
+  interviewId           String    @unique
+  overallScore          Int
+  technicalScore        Int
+  communicationScore    Int
+  problemSolvingScore   Int
+  optimizationScore     Int
+  codeQualityScore      Int
+  strengths             Json
+  weaknesses            Json
+  suggestions           Json
+  summary               String
+  createdAt             DateTime  @default(now())
+  nextSteps             Json?
+  transcriptAnnotations Json?
+  isPublic              Boolean   @default(true)
+  estimatedLevel        String?
+  isSolved              Boolean   @default(false)
+  spaceComplexity       String?
+  timeComplexity        String?
+  recruiterVerdict      String?
+  recruiterNotes        Json?
+  skillScores           Json?
+  candidateRoadmap      Json?
+  interview             Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ErrorLog {
+  id          String    @id @default(uuid())
+  interviewId String
+  errorType   String
+  message     String
+  createdAt   DateTime  @default(now())
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model EventLog {
+  id          String   @id @default(uuid())
+  interviewId String?
+  userId      String?
+  eventType   String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([interviewId])
+  @@index([userId])
+  @@index([eventType])
+}
+
+model InterviewQuestion {
+  id             String           @id @default(uuid())
+  order          Int              @default(1)
+  title          String
+  stage          String           @default("approach")
+  category       String           @default("code_editor")
+  durationMinutes Int             @default(5)
+  autoSwitch     Boolean          @default(true)
+  allowAiSwitch  Boolean          @default(true)
+  options        Json?
+  correctOption  Int?
+  explanation    String?
+  promptText     String
+  audioUrl       String?
+  audioSource    String           @default("generated")
+  expectedRubric Json?
+  secondaryProbe String?
+  maxProbes      Int              @default(1)
+  evaluationType String           @default("rubric_scored") // "rubric_scored" | "subjective_recruiter"
+  skillTags      Json?            // ["React", "System Design", "Leadership"]
+  difficulty     String?          @default("medium")
+  examples       Json?
+  constraints    Json?
+  testCases      Json?
+  starterCode    Json?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  jobRoleId      String?
+  jobRole        JobRole?         @relation(fields: [jobRoleId], references: [id], onDelete: Cascade)
+  evaluations    StepEvaluation[]
+
+  @@index([order])
+  @@index([stage])
+  @@index([category])
+  @@index([jobRoleId])
+}
+
+model JobRole {
+  id               String              @id @default(uuid())
+  title            String
+  slug             String              @unique
+  description      String?
+  department       String?             @default("Engineering")
+  level            String?             @default("Mid-Level")
+  mode             String              @default("dynamic") // "dynamic" | "hybrid"
+  hybridVoice      String?             @default("af_heart")
+  interviewerSkill String              @default("startup_pragmatist")
+  evaluatorSkill   String              @default("executive_committee")
+  targetSkills     String              @default("System Architecture, Big-O Complexity, Code Modularity, Ambition & Ownership")
+  isDefault        Boolean             @default(false)
+  isActive         Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  questions        InterviewQuestion[]
+  interviews       Interview[]
+
+  @@index([slug])
+  @@index([isDefault])
+}
+
+model StepEvaluation {
+  id                  String            @id @default(uuid())
+  interviewId         String
+  questionId          String
+  candidateTranscript String            @db.Text
+  matchedConcepts     Json?
+  missedConcepts      Json?
+  probeCount          Int               @default(0)
+  score               Int               @default(0)
+  feedback            String?
+  createdAt           DateTime          @default(now())
+  question            InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId])
+  @@index([questionId])
+}
+
+model AdminNotification {
+  id        String   @id @default(uuid())
+  type      String   // "success" | "error" | "info"
+  title     String
+  message   String
+  action    String?  // e.g. "DATA_FETCHED", "SETTINGS_SAVED", "VOICE_GENERATED"
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+}
+
+model AiSkill {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  type        String   // "interviewer" | "evaluator"
+  category    String?  @default("General")
+  description String?
+  badge       String?  @default("Custom")
+  content     String   @db.Text
+  files       Json?    // Optional multi-file folder array: [{ name: string, content: string, size?: number }]
+  isBuiltIn   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([type])
+  @@index([isActive])
+}
+
+model QuestionBankItem {
+  id              String   @id @default(uuid())
+  title           String
+  category        String   @default("code_editor") // "code_editor" | "option_quiz" | "conversation" | "drawing"
+  difficulty      String   @default("medium") // "easy" | "medium" | "hard"
+  stage           String   @default("coding")
+  durationMinutes Int      @default(10)
+  promptText      String   @db.Text
+
+  // Quiz specific fields
+  options         Json?    // ["Option A", "Option B", "Option C", "Option D"]
+  correctOption   Int?     // 0, 1, 2, 3
+  explanation     String?  @db.Text
+
+  // Coding specific fields
+  examples        Json?    // [{ input: "...", output: "...", explanation: "..." }]
+  constraints     Json?    // ["1 <= n <= 10^5", ...]
+  testCases       Json?    // [{ input: "...", expectedOutput: "...", isHidden: false }]
+  starterCode     Json?    // { python: "...", javascript: "...", cpp: "...", java: "..." }
+
+  // Additional Metadata
+  skillTags       Json?    // ["Arrays", "Two Pointers"]
+  expectedRubric  Json?
+  secondaryProbe  String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([difficulty])
+}
+
+// ==========================================
+// Placement Readiness Copilot Models
+// ==========================================
+
+model StudentProfile {
+  id               String               @id @default(uuid())
+  userId           String               @unique
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeFileName   String?
+  resumeText       String?              @db.Text
+  resumePageCount  Int?
+  targetRole       String?              @default("Full Stack Developer")
+  linkedinUrl      String?
+  linkedinAbout    String?              @db.Text
+  githubUsername   String?
+  leetcodeUsername String?
+  skills           Json?                // Extracted skills array: ["React", "TypeScript", "PostgreSQL"]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  projects         StudentProject[]
+  achievements     StudentAchievement[]
+  reviewReports    ProfileReview[]
+  readinessScore   ReadinessScore?
+
+  @@index([userId])
+}
+
+model StudentProject {
+  id          String         @id @default(uuid())
+  profileId   String
+  profile     StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  description String?        @db.Text
+  repoUrl     String?
+  liveUrl     String?
+  techStack   Json?          // e.g. ["Next.js", "Prisma", "TailwindCSS"]
+  order       Int            @default(1)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+model StudentAchievement {
+  id          String         @id @default(uuid())
+  profileId   String
+  profile     StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title       String
+  category    String         @default("hackathon") // "hackathon" | "certification" | "club" | "award"
+  description String?        @db.Text
+  date        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+model ProfileReview {
+  id               String         @id @default(uuid())
+  profileId        String
+  profile          StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  resumeCheck      Json?          // Pass/fail checks, formatting, ATS score, actionable rewrites
+  codebaseCheck    Json?          // GitHub repo review findings (README, secrets, structure)
+  liveLinkCheck    Json?          // Live project URLs response statuses
+  linkedinCheck    Json?          // Headline, about, and ready-to-copy rewrites
+  overallReview    String?        @db.Text
+  createdAt        DateTime       @default(now())
+
+  @@index([profileId])
+}
+
+model ReadinessScore {
+  id                String         @id @default(uuid())
+  profileId         String         @unique
+  profile           StudentProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  overallScore      Int            @default(0) // 0 - 100
+  tier              String         @default("Not ready") // "Not ready" (0-49), "Almost ready" (50-74), "Placement ready" (75-100)
+  resumeScore       Int            @default(0) // Weight 25%
+  projectsScore     Int            @default(0) // Weight 25%
+  interviewScore    Int            @default(0) // Weight 20%
+  githubScore       Int            @default(0) // Weight 10%
+  leetcodeScore     Int            @default(0) // Weight 10%
+  linkedinScore     Int            @default(0) // Weight 5%
+  achievementsScore Int            @default(0) // Weight 5%
+  topFixes          Json?          // Top 5 actions that yield highest score increase
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+model JobPosting {
+  id                String           @id @default(uuid())
+  title             String
+  company           String
+  description       String           @db.Text
+  location          String           @default("Bangalore / Remote")
+  isRemote          Boolean          @default(true)
+  jobType           String           @default("internship") // "internship" | "fulltime"
+  applyUrl          String
+  requiredSkills    Json             // ["React", "Next.js", "TypeScript"]
+  minReadinessScore Int              @default(50)
+  isMSOTInternal    Boolean          @default(false)
+  postedByStaff     Boolean          @default(false)
+  stipendOrSalary   String?          // e.g. "₹35,000 / month"
+  expiresAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  applications      JobApplication[]
+
+  @@index([isMSOTInternal])
+  @@index([jobType])
+}
+
+model JobApplication {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId        String
+  job          JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status       String     @default("Saved") // "Saved" | "Applied" | "Shortlisted" | "Interview" | "Offer" | "Rejected"
+  appliedAt    DateTime?
+  reminderDate DateTime?
+  notes        String?    @db.Text
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([jobId])
+  @@index([status])
+}
