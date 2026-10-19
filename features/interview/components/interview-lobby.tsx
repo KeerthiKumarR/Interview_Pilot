@@ -47,6 +47,32 @@ function LobbyVideoPreview({ stream }: { stream: MediaStream | null }) {
     />
   );
 }
+function playSpeakerTestChime() {
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.25); // E5
+
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.6);
+  } catch {
+    // Ignore if audio context is blocked
+  }
+}
 
 export function InterviewLobby({
   onReady,
@@ -245,6 +271,7 @@ export function InterviewLobby({
 
     setSpeakerTested(true);
     setIsPlayingTest(true);
+    playSpeakerTestChime();
 
     if (selectedVoiceId?.startsWith("local_")) {
       try {

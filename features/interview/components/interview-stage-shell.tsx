@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MiraiLogo } from "@/components/mirai-logo";
+import { VoiceOrb } from "@/components/voice-orb";
 
 export interface InterviewStageShellProps {
   interview?: {
@@ -936,67 +937,11 @@ export function InterviewStageShell({
           {/* ─── TAB 1: LIVE SPOKEN VIVA (VOICE-TO-VOICE ROOM) ───────────── */}
           {activeTab === "voice" && (
             <div className="flex flex-1 flex-col overflow-hidden my-3 space-y-3">
-              {/* Interviewer Stage Presence Card */}
-              <div className="relative rounded-2xl border border-border bg-gradient-to-b from-secondary/50 via-card to-background p-3.5 shrink-0 shadow-md overflow-hidden space-y-2.5">
-                {/* Ambient glow pulses based on voice state */}
-                {aiState === "speaking" && (
-                  <div className="absolute -top-10 -right-10 h-28 w-28 rounded-full bg-emerald-500/15 blur-2xl pointer-events-none animate-pulse" />
-                )}
-                {isSpeechListening && !isMicMuted && (
-                  <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-blue-500/15 blur-2xl pointer-events-none animate-pulse" />
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 border-2 border-primary/30 text-primary font-bold text-sm shadow-xs">
-                      <span>{interviewerName.charAt(0)}</span>
-                      {aiState === "speaking" && (
-                        <span className="absolute -inset-1 rounded-full border border-emerald-500/40 animate-ping pointer-events-none" />
-                      )}
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background ${
-                          aiState === "speaking"
-                            ? "bg-emerald-500 animate-pulse"
-                            : isSpeechListening
-                            ? "bg-blue-500 animate-pulse"
-                            : aiState === "thinking"
-                            ? "bg-amber-400 animate-bounce"
-                            : "bg-muted-foreground/40"
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-foreground">{interviewerName}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">Senior Interviewer</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${
-                            aiState === "speaking"
-                              ? "bg-emerald-500 animate-ping"
-                              : isSpeechListening
-                              ? "bg-blue-500 animate-pulse"
-                              : aiState === "thinking"
-                              ? "bg-amber-400 animate-pulse"
-                              : "bg-muted-foreground/40"
-                          }`}
-                        />
-                        <span className="font-medium text-foreground/90">
-                          {aiState === "speaking"
-                            ? "Speaking to you aloud"
-                            : isSpeechListening
-                            ? "Listening to you... speak freely"
-                            : aiState === "thinking"
-                            ? "Formulating question..."
-                            : "Connected & Ready"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Interrupt Button */}
-                  {aiState === "speaking" && onStopGeneration && (
+              {/* Interviewer Stage Presence Card with VoiceOrb */}
+              <div className="relative rounded-2xl border border-border bg-gradient-to-b from-secondary/40 via-card to-background p-3.5 shrink-0 shadow-md overflow-hidden space-y-2.5">
+                {/* Interrupt Button (Visible while AI is speaking) */}
+                {aiState === "speaking" && onStopGeneration && (
+                  <div className="flex justify-end">
                     <button
                       type="button"
                       onClick={onStopGeneration}
@@ -1005,33 +950,24 @@ export function InterviewStageShell({
                     >
                       Interrupt
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Animated Voice Equalizer Waveform */}
-                <div className="flex items-center justify-center gap-1 h-7 py-1 rounded-lg bg-background/60 border border-border/50">
-                  {[6, 14, 22, 16, 10, 26, 18, 12, 20, 8, 24, 14, 6].map((h, i) => (
-                    <div
-                      key={i}
-                      className={`w-0.5 rounded-full transition-all duration-200 ${
-                        aiState === "speaking"
-                          ? "bg-emerald-500 animate-pulse"
-                          : isSpeechListening
-                          ? "bg-blue-500 animate-pulse"
-                          : "bg-muted-foreground/25"
-                      }`}
-                      style={{
-                        height:
-                          aiState === "speaking"
-                            ? `${h}px`
-                            : isSpeechListening
-                            ? `${Math.max(4, h * 0.65)}px`
-                            : "3px",
-                        animationDelay: `${i * 65}ms`,
-                      }}
-                    />
-                  ))}
-                </div>
+                {/* Central Acoustic Voice Orb */}
+                <VoiceOrb
+                  state={
+                    aiState === "speaking"
+                      ? "speaking"
+                      : isSpeechListening && !isMicMuted
+                      ? "listening"
+                      : aiState === "thinking"
+                      ? "thinking"
+                      : "idle"
+                  }
+                  audioLevel={aiState === "speaking" ? 65 : liveSpeech || liveInterim ? 55 : 0}
+                  examinerName={interviewerName}
+                  size={105}
+                />
 
                 {/* Live Spoken Closed Caption (Interviewer's prompt) */}
                 <div className="rounded-xl border border-border/60 bg-background/50 p-2.5 max-h-32 overflow-y-auto">
