@@ -2,7 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
-import { speak, getBestFemaleVoice } from "@/hooks/use-web-speech";
+import { speak, getBestFemaleVoice, getBestMaleVoice, getVoiceGender } from "@/hooks/use-web-speech";
 
 /**
  * Centralized Text-to-Speech hook using OpenRouter Backend TTS.
@@ -147,16 +147,23 @@ async function getOrFetchAudioUrl(text: string, voiceId: string, interviewId: st
 async function speakBrowserFallback(
   text: string,
   onEnd?: () => void,
-  onError?: () => void
+  onError?: () => void,
+  voiceIdOverride?: string | null
 ) {
   try {
+    const store = useInterviewStore.getState();
+    const voiceId = voiceIdOverride ?? store.selectedVoiceId ?? "local_female";
+    const gender = getVoiceGender(voiceId);
+    const isFemale = gender === "female";
+
     const rate = await getActiveTtsSpeed();
     const voices = typeof window !== "undefined" ? window.speechSynthesis?.getVoices?.() || [] : [];
-    const matchedVoice = getBestFemaleVoice(voices);
+    const matchedVoice = isFemale ? getBestFemaleVoice(voices) : getBestMaleVoice(voices);
 
     speak(text, {
       rate,
-      pitch: 1.1,
+      pitch: isFemale ? 1.05 : 0.92,
+      gender,
       voiceName: matchedVoice?.name || null,
       onEnd,
       onError,
@@ -176,12 +183,12 @@ export async function speakTestBackend(text: string, voiceId: string, interviewI
   try {
     const activeVoiceId = voiceId || "local_female";
     if (activeVoiceId.startsWith("local_")) {
-      await speakBrowserFallback(text, onEnd, onError);
+      await speakBrowserFallback(text, onEnd, onError, activeVoiceId);
       return null;
     }
     const url = await getOrFetchAudioUrl(text, activeVoiceId, interviewId);
     if (!url) {
-      await speakBrowserFallback(text, onEnd, onError);
+      await speakBrowserFallback(text, onEnd, onError, activeVoiceId);
       return null;
     }
     const audio = new Audio(url);
@@ -191,14 +198,14 @@ export async function speakTestBackend(text: string, voiceId: string, interviewI
       if (onEnd) onEnd();
     };
     audio.onerror = () => {
-      speakBrowserFallback(text, onEnd, onError);
+      speakBrowserFallback(text, onEnd, onError, activeVoiceId);
     };
     
     await audio.play();
     return audio;
   } catch (e) {
     console.warn("Test audio backend failed, falling back to browser speech:", e);
-    await speakBrowserFallback(text, onEnd, onError);
+    await speakBrowserFallback(text, onEnd, onError, voiceId);
     return null;
   }
 }
@@ -211,12 +218,12 @@ export async function speakBackend(text: string, interviewId: string, onEnd?: ()
   try {
     const selectedVoiceId = useInterviewStore.getState().selectedVoiceId || "local_female";
     if (selectedVoiceId.startsWith("local_")) {
-      await speakBrowserFallback(text, onEnd, onError);
+      await speakBrowserFallback(text, onEnd, onError, selectedVoiceId);
       return null;
     }
     const url = await getOrFetchAudioUrl(text, selectedVoiceId, interviewId);
     if (!url) {
-      await speakBrowserFallback(text, onEnd, onError);
+      await speakBrowserFallback(text, onEnd, onError, selectedVoiceId);
       return null;
     }
     const audio = new Audio(url);
@@ -226,14 +233,15 @@ export async function speakBackend(text: string, interviewId: string, onEnd?: ()
       if (onEnd) onEnd();
     };
     audio.onerror = () => {
-      speakBrowserFallback(text, onEnd, onError);
+      speakBrowserFallback(text, onEnd, onError, selectedVoiceId);
     };
     
     await audio.play();
     return audio;
   } catch (e) {
     console.warn("Speak backend failed, falling back to browser speech:", e);
-    await speakBrowserFallback(text, onEnd, onError);
+    const selectedVoiceId = useInterviewStore.getState().selectedVoiceId || "local_female";
+    await speakBrowserFallback(text, onEnd, onError, selectedVoiceId);
     return null;
   }
 }
@@ -306,13 +314,15 @@ export function useTTS(): UseTTSResult {
       store.setAIState("speaking");
 
       if (selectedVoiceId.startsWith("local_")) {
-        const isFemale = selectedVoiceId === "local_female";
+        const gender = getVoiceGender(selectedVoiceId);
+        const isFemale = gender === "female";
         const voices = typeof window !== "undefined" ? window.speechSynthesis.getVoices() : [];
-        const matchedVoice = isFemale ? getBestFemaleVoice(voices) : voices.find(v => !v.name.toLowerCase().includes("female"));
+        const matchedVoice = isFemale ? getBestFemaleVoice(voices) : getBestMaleVoice(voices);
 
         speak(sentence, {
           rate: getActiveTtsSpeed(),
-          pitch: isFemale ? 1.1 : 1.0,
+          pitch: isFemale ? 1.05 : 0.92,
+          gender,
           voiceName: matchedVoice?.name || null,
           onEnd: () => {
             isSpeakingRef.current = false;
@@ -332,7 +342,7 @@ export function useTTS(): UseTTSResult {
 
       const url = await getOrFetchAudioUrl(sentence, selectedVoiceId, interviewId);
       if (!url) {
-        // Fallback to browser Web Speech API ($0 cost, always works)
+        // Fallback to browser Web Speech API with gender matching
         await speakBrowserFallback(
           sentence,
           () => {
@@ -346,7 +356,8 @@ export function useTTS(): UseTTSResult {
             currentAudioRef.current = null;
             activeAudioUrl = null;
             processNext();
-          }
+          },
+          selectedVoiceId
         );
         return;
       }
@@ -386,7 +397,8 @@ export function useTTS(): UseTTSResult {
             currentAudioRef.current = null;
             activeAudioUrl = null;
             processNext();
-          }
+          },
+          selectedVoiceId
         );
       };
 

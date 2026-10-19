@@ -50,11 +50,12 @@ export function CodingWorkspaceView({
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
 
   const [activeProblemTab, setActiveProblemTab] = useState<"problem" | "whiteboard" | "examples" | "constraints" | "hints">("problem");
-  const [activeTestTab, setActiveTestTab] = useState<"cases" | "output">("cases");
+  const [activeTestTab, setActiveTestTab] = useState<"cases" | "output">("output");
   const [selectedCaseIndex, setSelectedCaseIndex] = useState(0);
 
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedRecently, setSubmittedRecently] = useState(false);
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
 
   const isViva = useMemo(() => {
@@ -276,10 +277,13 @@ export function CodingWorkspaceView({
         });
       }
 
-      // 2. Trigger parent submission / next stage
+      // 2. Trigger parent submission / AI evaluation
       if (onSubmitCode) {
         onSubmitCode();
       }
+
+      setSubmittedRecently(true);
+      setTimeout(() => setSubmittedRecently(false), 3000);
     } catch (err) {
       console.error("Submit code error:", err);
     } finally {
@@ -750,10 +754,23 @@ export function CodingWorkspaceView({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-3.5 py-1.5 text-xs font-semibold text-foreground hover:bg-secondary transition cursor-pointer disabled:opacity-50"
+              className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer disabled:opacity-50 ${
+                submittedRecently
+                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                  : "border-border bg-secondary/50 text-foreground hover:bg-secondary"
+              }`}
             >
-              <Send className="h-3 w-3" />
-              <span>{isSubmitting ? "Submitting..." : "Submit"}</span>
+              {submittedRecently ? (
+                <>
+                  <Check className="h-3 w-3 stroke-[3]" />
+                  <span>Submitted to Interviewer!</span>
+                </>
+              ) : (
+                <>
+                  <Send className="h-3 w-3" />
+                  <span>{isSubmitting ? "Submitting..." : "Submit Code"}</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -768,31 +785,33 @@ export function CodingWorkspaceView({
           {/* Drawer Tabs */}
           <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs font-semibold bg-muted/20">
             <div className="flex items-center gap-6">
-              <button
-                type="button"
-                onClick={() => setActiveTestTab("cases")}
-                className={`transition cursor-pointer relative pb-0.5 ${
-                  activeTestTab === "cases"
-                    ? "text-foreground font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <span>{isViva ? "API Payloads" : "Test Cases"}</span>
-                {activeTestTab === "cases" && (
-                  <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-                )}
-              </button>
+              {!isViva && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTestTab("cases")}
+                  className={`transition cursor-pointer relative pb-0.5 ${
+                    activeTestTab === "cases"
+                      ? "text-foreground font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>Test Cases</span>
+                  {activeTestTab === "cases" && (
+                    <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                  )}
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={() => setActiveTestTab("output")}
                 className={`transition cursor-pointer relative pb-0.5 flex items-center gap-1.5 ${
-                  activeTestTab === "output"
+                  activeTestTab === "output" || isViva
                     ? "text-foreground font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span>Output</span>
+                <span>Console Output</span>
                 {executionResult && (
                   <span
                     className={`h-2 w-2 rounded-full ${
@@ -802,7 +821,7 @@ export function CodingWorkspaceView({
                     }`}
                   />
                 )}
-                {activeTestTab === "output" && (
+                {(activeTestTab === "output" || isViva) && (
                   <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
                 )}
               </button>
@@ -837,7 +856,7 @@ export function CodingWorkspaceView({
           {/* Drawer Content */}
           <div className="flex-1 overflow-y-auto p-3 text-xs">
             {/* VIEW A: Test Cases List */}
-            {activeTestTab === "cases" && (
+            {!isViva && activeTestTab === "cases" && (
               <div className="space-y-2 font-mono">
                 {displayExamples.map((ex, idx) => (
                   <div
@@ -850,7 +869,7 @@ export function CodingWorkspaceView({
                   >
                     <div className="flex items-center gap-3 truncate">
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="font-semibold text-foreground">{isViva ? `Payload ${idx + 1}` : `Case ${idx + 1}`}</span>
+                      <span className="font-semibold text-foreground">Case {idx + 1}</span>
                       <span className="text-muted-foreground truncate">{ex.input}</span>
                     </div>
 
@@ -877,7 +896,7 @@ export function CodingWorkspaceView({
             )}
 
             {/* VIEW B: Sandbox Output */}
-            {activeTestTab === "output" && (
+            {(isViva || activeTestTab === "output") && (
               <div className="h-full font-mono space-y-2">
                 {isRunning ? (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground py-4">

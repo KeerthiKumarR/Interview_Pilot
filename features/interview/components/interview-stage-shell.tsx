@@ -174,15 +174,12 @@ export function InterviewStageShell({
     onInterimResult: (interim) => {
       if (aiState === "speaking" || aiState === "thinking") return;
       setLiveInterim(interim);
-      if (isLiveVoiceMode) {
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-        }
-        setIsAutoSending(true);
-        silenceTimeoutRef.current = setTimeout(() => {
-          finalizeAndSendSpeech();
-        }, 800);
+      // Cancel any pending silence timeout while the user is actively producing sound or breathing
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
       }
+      setIsAutoSending(false);
     },
     onResult: (transcript) => {
       if (aiState === "speaking" || aiState === "thinking") return;
@@ -200,10 +197,11 @@ export function InterviewStageShell({
         if (silenceTimeoutRef.current) {
           clearTimeout(silenceTimeoutRef.current);
         }
-        setIsAutoSending(true);
+        // Give candidate 3.0 seconds of natural breathing/thinking pause before auto-sending
         silenceTimeoutRef.current = setTimeout(() => {
+          setIsAutoSending(true);
           finalizeAndSendSpeech();
-        }, 800);
+        }, 3000);
       }
     },
   });
@@ -1026,7 +1024,7 @@ export function InterviewStageShell({
                       <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2 space-y-1">
                         <Sparkles className="h-4 w-4 text-primary animate-pulse" />
                         <p className="text-xs font-medium text-foreground">Listening to your voice...</p>
-                        <p className="text-[10px]">Speak your answer naturally. Pausing for 1.6s auto-submits.</p>
+                        <p className="text-[10px]">Speak your answer naturally. Pausing for 3.0s auto-submits, or click Send Now.</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2">

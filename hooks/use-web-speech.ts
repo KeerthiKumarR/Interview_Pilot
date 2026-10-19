@@ -266,6 +266,100 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
 }
 
 /**
+ * Returns whether a voiceId corresponds to a male or female persona.
+ */
+export function getVoiceGender(voiceId?: string | null): "male" | "female" {
+  if (!voiceId) return "female";
+  const found = getAvailableVoices().find((v) => v.id === voiceId);
+  if (found) return found.gender;
+
+  const lower = voiceId.toLowerCase();
+  if (
+    lower.startsWith("af_") ||
+    lower.startsWith("if_") ||
+    lower.startsWith("bf_") ||
+    lower.includes("female") ||
+    lower === "gemini_nova" ||
+    lower === "gemini_shimmer" ||
+    lower.includes("ananya") ||
+    lower.includes("diya") ||
+    lower.includes("isha") ||
+    lower.includes("kavya") ||
+    lower.includes("meera") ||
+    lower.includes("priya") ||
+    lower.includes("tara") ||
+    lower.includes("neha") ||
+    lower.includes("riya") ||
+    lower.includes("sanya")
+  ) {
+    return "female";
+  }
+
+  return "male";
+}
+
+/**
+ * Guaranteed selector for natural male voices (prioritizing Indian English and clear male voices).
+ * Ensures Aarav, Rohan, Vikram, Dev, and Neer sound like clear, confident male interviewers.
+ */
+export function getBestMaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const list = voices && voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+  if (!list || list.length === 0) return null;
+
+  // Strict list of female names to NEVER assign to a male interviewer
+  const femaleNames = [
+    "ananya", "diya", "isha", "kavya", "meera", "priya", "tara", "neha", "riya", "sanya",
+    "samantha", "victoria", "karen", "kathy", "shelley", "flo", "sandy", "moira", "tessa",
+    "fiona", "zira", "hazel", "catherine", "allison", "ava", "stephanie", "zoe", "jenny", "aria",
+    "female", "veena", "sangeeta", "aditi", "lekha", "pooja", "serena"
+  ];
+
+  const isFemaleVoice = (voiceName: string) => {
+    const lower = voiceName.toLowerCase();
+    return femaleNames.some((f) => lower.includes(f));
+  };
+
+  // 1. High priority: Verified Indian English male voices (e.g. Rishi en-IN, Prabhat, Aman)
+  const indianMaleNames = ["rishi", "prabhat", "aman", "aarav", "rohan", "vikram", "kabir", "neer", "dev", "male"];
+  const indianMale = list.find((v) => {
+    const n = v.name.toLowerCase();
+    const l = v.lang.toLowerCase();
+    const isIndian = l.includes("en-in") || l.includes("en_in") || n.includes("india");
+    return isIndian && indianMaleNames.some((male) => n.includes(male)) && !isFemaleVoice(n);
+  });
+  if (indianMale) return indianMale;
+
+  // 2. High-quality natural male voices on macOS, Windows, Chrome, Edge
+  const standardMaleNames = [
+    "daniel", "alex", "fred", "david", "george", "oliver", "tom",
+    "microsoft david", "microsoft mark", "google us english male", "google uk english male",
+    "guy", "ryan", "christopher", "eric", "brian"
+  ];
+  for (const name of standardMaleNames) {
+    const v = list.find((voice) => {
+      const n = voice.name.toLowerCase();
+      return n.includes(name) && !isFemaleVoice(n);
+    });
+    if (v) return v;
+  }
+
+  // 3. Any voice explicitly tagged 'male' in its name (not matching female)
+  const taggedMale = list.find((v) => v.name.toLowerCase().includes("male") && !isFemaleVoice(v.name));
+  if (taggedMale) return taggedMale;
+
+  // 4. Any English voice that is definitely not female
+  const nonFemaleEnglish = list.find((v) => {
+    const n = v.name.toLowerCase();
+    const l = v.lang.toLowerCase();
+    return l.startsWith("en") && !isFemaleVoice(n);
+  });
+  if (nonFemaleEnglish) return nonFemaleEnglish;
+
+  return list[0] || null;
+}
+
+/**
  * Guaranteed selector for natural female voices (prioritizing Indian English and clear female voices).
  * Ensures Ananya never sounds like a deep male voice.
  */
@@ -343,6 +437,7 @@ export function speak(
     pitch?: number;
     lang?: string;
     voiceName?: string | null;
+    gender?: "male" | "female";
     onEnd?: () => void;
     onError?: () => void;
   }
@@ -365,20 +460,21 @@ export function speak(
   // Chrome bug workaround: after cancel(), there's a brief window where
   // speak() is silently ignored. Use a slightly longer delay to let it settle.
   setTimeout(() => {
+    const isMale = options?.gender === "male";
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = options?.rate ?? 1.0;
-    utterance.pitch = options?.pitch ?? 1.1; // Friendly female pitch default
+    utterance.pitch = options?.pitch ?? (isMale ? 0.92 : 1.05);
     utterance.lang = options?.lang ?? "en-US";
 
     const voices = window.speechSynthesis.getVoices();
 
-    // Use specific voice if voiceName is provided, otherwise guaranteed best female voice
+    // Use specific voice if voiceName is provided, otherwise gender-matched best voice
     let selectedVoice: SpeechSynthesisVoice | null = null;
     if (options?.voiceName) {
       selectedVoice = voices.find((v) => v.name === options.voiceName) || null;
     }
     if (!selectedVoice) {
-      selectedVoice = getBestFemaleVoice(voices);
+      selectedVoice = isMale ? getBestMaleVoice(voices) : getBestFemaleVoice(voices);
     }
     if (selectedVoice) {
       utterance.voice = selectedVoice;

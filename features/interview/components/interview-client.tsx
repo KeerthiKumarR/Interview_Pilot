@@ -619,6 +619,26 @@ export function InterviewClient({
     [interview.id, resetTTS, sendMessage]
   );
 
+  // Submit code to the AI interviewer for review without terminating the session
+  const handleCodeSubmit = useCallback(async () => {
+    const store = useInterviewStore.getState();
+    const currentCode = store.code;
+
+    // 1. Persist candidate's code to DB
+    try {
+      await fetch(`/api/interviews/${interview.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: currentCode }),
+      });
+    } catch (e) {
+      console.warn("Failed to save code on submit:", e);
+    }
+
+    // 2. Submit code to AI interviewer for evaluation & feedback
+    await handleSendMessage("I have finished and submitted my implementation. Please review my code and provide your feedback.");
+  }, [interview.id, handleSendMessage]);
+
   const handleStopGeneration = useCallback(() => {
     stopGeneration();
     resetTTS();
@@ -1031,7 +1051,7 @@ export function InterviewClient({
   if (isPlacementViva) {
     stageContent = (
       <CodingWorkspaceView
-        onSubmitCode={handleEndInterview}
+        onSubmitCode={handleCodeSubmit}
       />
     );
   } else if (activeCategory === "conversation") {
@@ -1058,7 +1078,7 @@ export function InterviewClient({
     // Default "code_editor"
     stageContent = (
       <CodingWorkspaceView
-        onSubmitCode={handleEndInterview}
+        onSubmitCode={handleCodeSubmit}
       />
     );
   }

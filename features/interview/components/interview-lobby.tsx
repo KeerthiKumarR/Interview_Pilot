@@ -275,16 +275,15 @@ export function InterviewLobby({
 
     if (selectedVoiceId?.startsWith("local_")) {
       try {
-        const { speak } = await import("@/hooks/use-web-speech");
-        const gender = selectedVoiceId === "local_female" ? "female" : "male";
+        const { speak, getBestFemaleVoice, getBestMaleVoice, getVoiceGender } = await import("@/hooks/use-web-speech");
+        const gender = getVoiceGender(selectedVoiceId);
+        const isFemale = gender === "female";
         const voices = typeof window !== "undefined" ? window.speechSynthesis.getVoices() : [];
-        const matchedVoice = voices.find(v => {
-          const nameLower = v.name.toLowerCase();
-          const isFemale = nameLower.includes("female") || nameLower.includes("zira") || nameLower.includes("samantha") || nameLower.includes("hazel") || nameLower.includes("siri");
-          return gender === "female" ? isFemale : !isFemale;
-        });
+        const matchedVoice = isFemale ? getBestFemaleVoice(voices) : getBestMaleVoice(voices);
 
         speak("Hello! I am your local AI interviewer. Your speaker is working.", {
+          pitch: isFemale ? 1.05 : 0.92,
+          gender,
           voiceName: matchedVoice?.name || null,
           onEnd: () => setIsPlayingTest(false),
           onError: () => setIsPlayingTest(false)
