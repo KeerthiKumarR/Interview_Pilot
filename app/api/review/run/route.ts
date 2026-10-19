@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { runFullAudit } from "@/lib/review/full-auditor";
+import { invalidateReviewCache } from "@/app/api/review/route";
 
 export const maxDuration = 60; // 60s for full audit runner
 
@@ -111,6 +112,8 @@ export async function POST() {
         topFixes: auditReport.resumeCheck.actionableFixes as unknown as Prisma.InputJsonValue,
       },
     });
+
+    invalidateReviewCache(user.id);
 
     return NextResponse.json({
       success: true,

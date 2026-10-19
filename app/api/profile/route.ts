@@ -3,6 +3,23 @@ import { getAuthenticatedUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { SaveProfilePayload } from "@/types/profile";
 
+export const dynamic = "force-dynamic";
+
+interface CachedProfileResponse {
+  profile: any;
+  expiresAt: number;
+}
+
+const profileMemoryCache = new Map<string, CachedProfileResponse>();
+
+export function invalidateProfileCache(userId?: string) {
+  if (userId) {
+    profileMemoryCache.delete(userId);
+  } else {
+    profileMemoryCache.clear();
+  }
+}
+
 /**
  * GET /api/profile
  * Retrieves the authenticated student's profile, projects, and achievements.
@@ -12,6 +29,19 @@ export async function GET() {
     const user = await getAuthenticatedUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const now = Date.now();
+    const cached = profileMemoryCache.get(user.id);
+    if (cached && cached.expiresAt > now) {
+      return NextResponse.json(
+        { profile: cached.profile },
+        {
+          headers: {
+            "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+          },
+        }
+      );
     }
 
     const profile = await prisma.studentProfile.findUnique({
@@ -27,7 +57,19 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ profile });
+    profileMemoryCache.set(user.id, {
+      profile,
+      expiresAt: now + 30_000, // 30s cache
+    });
+
+    return NextResponse.json(
+      { profile },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Error fetching student profile:", error);
     return NextResponse.json(
@@ -145,6 +187,8 @@ export async function POST(req: Request) {
         },
       });
     });
+
+    invalidateProfileCache(user.id);
 
     return NextResponse.json({
       success: true,
