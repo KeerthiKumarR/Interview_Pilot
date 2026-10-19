@@ -49,64 +49,137 @@ export function ResumeDropzone({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Client-side stream text extractor for bulletproof zero-downtime parsing
+  // Client-side stream text extractor with pdfjs-dist primary and byte regex fallback
   const extractClientSidePdf = async (file: File) => {
-    const arrayBuffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    let raw = "";
-    const CHUNK_SIZE = 8192;
-    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-      const chunk = bytes.subarray(i, i + CHUNK_SIZE);
-      raw += String.fromCharCode(...chunk);
+    let text = "";
+    let pageCount = 1;
+
+    try {
+      const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = getDocument({
+        data: new Uint8Array(arrayBuffer),
+        isEvalSupported: false,
+        useSystemFonts: true,
+      });
+      const doc = await loadingTask.promise;
+      pageCount = doc.numPages || 1;
+      const pageTexts: string[] = [];
+
+      for (let i = 1; i <= pageCount; i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        const pageStr = content.items
+          .map((item: any) => (item && item.str ? item.str : ""))
+          .join(" ");
+        pageTexts.push(pageStr);
+      }
+      text = pageTexts.join("\n").trim();
+    } catch (e) {
+      console.warn("Client pdfjs parsing fallback to binary regex:", e);
     }
 
-    const pageMatches = raw.match(/\/Type\s*\/Page\b/g);
-    const pageCount = pageMatches ? Math.max(1, pageMatches.length) : 1;
+    if (text.length < 50) {
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let raw = "";
+      const CHUNK_SIZE = 8192;
+      for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+        const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+        raw += String.fromCharCode(...chunk);
+      }
 
-    const textPieces: string[] = [];
-    const tjRegex = /\(([^()]{2,})\)\s*(?:Tj|'|")/g;
-    let match: RegExpExecArray | null;
-    while ((match = tjRegex.exec(raw)) !== null) {
-      const piece = match[1]
-        .replace(/\\([()\\])/g, "$1")
-        .replace(/\\n/g, " ")
-        .replace(/\\r/g, " ")
-        .replace(/\\t/g, " ")
-        .trim();
-      if (piece.length > 1 && !/^[\x00-\x1F\x7F]+$/.test(piece)) {
-        textPieces.push(piece);
+      const pageMatches = raw.match(/\/Type\s*\/Page\b/g);
+      pageCount = pageMatches ? Math.max(1, pageMatches.length) : pageCount;
+
+      const textPieces: string[] = [];
+      const tjRegex = /\(([^()]{2,})\)\s*(?:Tj|'|")/g;
+      let match: RegExpExecArray | null;
+      while ((match = tjRegex.exec(raw)) !== null) {
+        const piece = match[1]
+          .replace(/\\([()\\])/g, "$1")
+          .replace(/\\n/g, " ")
+          .replace(/\\r/g, " ")
+          .replace(/\\t/g, " ")
+          .trim();
+        if (piece.length > 1 && !/^[\x00-\x1F\x7F]+$/.test(piece)) {
+          textPieces.push(piece);
+        }
+      }
+
+      const arrayRegex = /\[([^\[\]]+)\]\s*TJ/g;
+      while ((match = arrayRegex.exec(raw)) !== null) {
+        const inner = match[1];
+        const innerPieces = inner.match(/\(([^()]+)\)/g);
+        if (innerPieces) {
+          innerPieces.forEach((p) => {
+            const clean = p.slice(1, -1).trim();
+            if (clean.length > 1) textPieces.push(clean);
+          });
+        }
+      }
+
+      const fallbackText = textPieces.join(" ").replace(/\s+/g, " ").trim();
+      if (fallbackText.length > text.length) {
+        text = fallbackText;
       }
     }
 
-    const arrayRegex = /\[([^\[\]]+)\]\s*TJ/g;
-    while ((match = arrayRegex.exec(raw)) !== null) {
-      const inner = match[1];
-      const innerPieces = inner.match(/\(([^()]+)\)/g);
-      if (innerPieces) {
-        innerPieces.forEach((p) => {
-          const clean = p.slice(1, -1).trim();
-          if (clean.length > 1) textPieces.push(clean);
-        });
-      }
-    }
+    const normText = ` ${text.toLowerCase()} `;
 
-    const text = textPieces.join(" ").replace(/\s+/g, " ").trim();
-    const normText = text.toLowerCase();
-
-    const COMMON_SKILLS = [
-      "React", "Next.js", "TypeScript", "JavaScript", "Node.js", "Express", "Python",
-      "Django", "FastAPI", "Java", "Spring Boot", "C++", "C", "Go", "Rust", "SQL",
-      "PostgreSQL", "MySQL", "MongoDB", "Redis", "GraphQL", "REST API", "Docker",
-      "Kubernetes", "AWS", "GCP", "Azure", "Git", "GitHub", "Tailwind CSS", "HTML",
-      "CSS", "Prisma", "CI/CD", "Jest", "PyTest", "Linux", "Machine Learning", "Redux"
+    const SKILL_RULES: Array<{ name: string; aliases: string[] }> = [
+      { name: "React", aliases: ["react", "react.js", "reactjs"] },
+      { name: "Next.js", aliases: ["next.js", "nextjs", "next js"] },
+      { name: "TypeScript", aliases: ["typescript", "ts"] },
+      { name: "JavaScript", aliases: ["javascript", "js", "es6"] },
+      { name: "Node.js", aliases: ["node.js", "nodejs", "node"] },
+      { name: "Express", aliases: ["express", "express.js", "expressjs"] },
+      { name: "Python", aliases: ["python", "python3", "py"] },
+      { name: "Django", aliases: ["django"] },
+      { name: "FastAPI", aliases: ["fastapi"] },
+      { name: "Java", aliases: ["java", "core java"] },
+      { name: "Spring Boot", aliases: ["spring boot", "springboot", "spring"] },
+      { name: "C++", aliases: ["c++", "cpp"] },
+      { name: "C", aliases: ["c language", "ansi c"] },
+      { name: "Go", aliases: ["golang", "go language"] },
+      { name: "Rust", aliases: ["rust", "rustlang"] },
+      { name: "SQL", aliases: ["sql", "rdbms"] },
+      { name: "PostgreSQL", aliases: ["postgresql", "postgres", "psql"] },
+      { name: "MySQL", aliases: ["mysql"] },
+      { name: "MongoDB", aliases: ["mongodb", "mongo", "mongoose"] },
+      { name: "Redis", aliases: ["redis"] },
+      { name: "GraphQL", aliases: ["graphql"] },
+      { name: "REST API", aliases: ["rest api", "restful", "restful api"] },
+      { name: "Docker", aliases: ["docker", "dockerfile"] },
+      { name: "Kubernetes", aliases: ["kubernetes", "k8s"] },
+      { name: "AWS", aliases: ["aws", "s3", "ec2", "lambda"] },
+      { name: "GCP", aliases: ["gcp", "google cloud"] },
+      { name: "Azure", aliases: ["azure"] },
+      { name: "Git", aliases: ["git"] },
+      { name: "GitHub", aliases: ["github"] },
+      { name: "Tailwind CSS", aliases: ["tailwind css", "tailwindcss", "tailwind"] },
+      { name: "HTML", aliases: ["html", "html5"] },
+      { name: "CSS", aliases: ["css", "css3"] },
+      { name: "Prisma", aliases: ["prisma"] },
+      { name: "CI/CD", aliases: ["ci/cd", "github actions"] },
+      { name: "Linux", aliases: ["linux", "ubuntu", "bash"] },
+      { name: "Machine Learning", aliases: ["machine learning", "ml", "ai"] },
+      { name: "Redux", aliases: ["redux", "redux toolkit"] },
+      { name: "Supabase", aliases: ["supabase"] },
+      { name: "Firebase", aliases: ["firebase"] },
     ];
 
     const detectedSkills: string[] = [];
-    for (const skill of COMMON_SKILLS) {
-      const escaped = skill.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-      const regex = new RegExp(`(?:^|\\W)${escaped}(?:$|\\W)`, "i");
-      if (regex.test(normText)) {
-        detectedSkills.push(skill);
+    for (const rule of SKILL_RULES) {
+      for (const alias of rule.aliases) {
+        const escaped = alias.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const regex = new RegExp(`(?:^|[^a-z0-9#+])${escaped}(?:$|[^a-z0-9#+])`, "i");
+        if (regex.test(normText)) {
+          if (!detectedSkills.includes(rule.name)) {
+            detectedSkills.push(rule.name);
+          }
+          break;
+        }
       }
     }
 
