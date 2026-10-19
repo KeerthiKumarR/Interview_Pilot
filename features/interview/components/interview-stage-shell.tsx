@@ -129,12 +129,16 @@ export function InterviewStageShell({
   const [liveSpeech, setLiveSpeech] = useState("");
   const [liveInterim, setLiveInterim] = useState("");
   const [isAutoSending, setIsAutoSending] = useState(false);
+  const [micVolume, setMicVolume] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechAccumulatorRef = useRef<string>("");
   const stopListeningRef = useRef<() => void>(() => {});
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   const latestAssistantMsg = useMemo(() => {
     return [...messages].reverse().find((m) => m.role === "assistant");
@@ -231,13 +235,13 @@ export function InterviewStageShell({
           clearTimeout(silenceTimeoutRef.current);
         }
         // Adaptive silence pause:
-        // If the candidate completed a sentence (ends with . ? ! or clear stop signal), wait only 1.4s!
-        // If it's a mid-sentence pause or breath without terminal punctuation, give 2.8s breathing room!
+        // If the candidate completed a sentence (ends with . ? ! or clear stop signal), wait 1.8s!
+        // If it's a mid-sentence pause or breath without terminal punctuation, give 3.4s breathing room!
         const trimmed = combined.trim();
         const isSentenceComplete =
           /[.?!]$/.test(trimmed) ||
           /\b(that's all|that's it|i am done|i'm done|thank you|what do you think)\b$/i.test(trimmed);
-        const pauseDelay = isSentenceComplete ? 1400 : 2800;
+        const pauseDelay = isSentenceComplete ? 1800 : 3400;
 
         silenceTimeoutRef.current = setTimeout(() => {
           setIsAutoSending(true);
@@ -288,6 +292,105 @@ export function InterviewStageShell({
       return () => clearTimeout(t);
     }
   }, [aiState, isLiveVoiceMode, isMicMuted, isSpeechListening, startListening, stopListening]);
+
+  // 🎙️ High-Performance Hardware Microphone Monitor & AGC (Auto Gain Control)
+  // Engages browser DSP (Auto Gain, Noise Suppression, Echo Cancellation) to amplify soft speech
+  // and dynamically tracks real-time voice volume for the visualizer.
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.mediaDevices) return;
+    if (isMicMuted) {
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      setMicVolume(0);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function initHardwareMic() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            autoGainControl: true,
+            noiseSuppression: true,
+            echoCancellation: true,
+          },
+        });
+
+        if (!isMounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        micStreamRef.current = stream;
+
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        const audioCtx = new AudioContextClass();
+        audioContextRef.current = audioCtx;
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 128;
+        source.connect(analyser);
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        const trackAudioLevel = () => {
+          if (!isMounted) return;
+          analyser.getByteFrequencyData(dataArray);
+
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+          // Scale human vocal frequencies smoothly
+          const level = Math.min(100, Math.round((avg / 80) * 100));
+          setMicVolume(level);
+
+          // If the candidate is actively vocalizing (level > 12),
+          // postpone any pending silence auto-submission so they are never interrupted!
+          if (level > 12 && silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+
+          animFrameRef.current = requestAnimationFrame(trackAudioLevel);
+        };
+
+        animFrameRef.current = requestAnimationFrame(trackAudioLevel);
+      } catch (err) {
+        console.warn("[StageShell] Hardware mic AGC setup notice:", err);
+      }
+    }
+
+    initHardwareMic();
+
+    return () => {
+      isMounted = false;
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+    };
+  }, [isMicMuted]);
 
   // Sync camera stream to PiP element
   useEffect(() => {
@@ -1014,7 +1117,13 @@ export function InterviewStageShell({
                       ? "thinking"
                       : "idle"
                   }
-                  audioLevel={aiState === "speaking" ? 65 : liveSpeech || liveInterim ? 55 : 0}
+                  audioLevel={
+                    aiState === "speaking"
+                      ? 65
+                      : isSpeechListening && !isMicMuted
+                      ? Math.max(micVolume * 1.5, liveInterim ? 45 : 0)
+                      : 0
+                  }
                   examinerName={interviewerName}
                   size={105}
                 />
@@ -1051,6 +1160,27 @@ export function InterviewStageShell({
                         <Mic className="h-3 w-3" />
                       </div>
                       <span className="font-semibold text-foreground text-xs">Your Spoken Answer</span>
+                      {isSpeechListening && !isMicMuted && (
+                        <div className="flex items-center gap-1.5 ml-1">
+                          <div className="flex items-end gap-0.5 h-3" title={`Microphone Level: ${micVolume}%`}>
+                            {[10, 25, 45, 70].map((threshold, idx) => (
+                              <div
+                                key={idx}
+                                className={`w-1 rounded-full transition-all duration-75 ${
+                                  micVolume >= threshold
+                                    ? idx === 3
+                                      ? "h-3 bg-amber-400"
+                                      : "h-2.5 bg-emerald-500"
+                                    : "h-1 bg-muted-foreground/30"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {micVolume >= 12 ? `${micVolume}%` : "Clear"}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5">
@@ -1075,9 +1205,16 @@ export function InterviewStageShell({
                   {/* Real-time Candidate Spoken Transcript Pill */}
                   <div className="min-h-[5.5rem] max-h-36 overflow-y-auto rounded-xl border border-border/80 bg-secondary/30 p-2.5 text-xs leading-relaxed">
                     {liveSpeech || liveInterim ? (
-                      <p className="text-foreground font-medium">
-                        "{liveSpeech} <span className="text-muted-foreground italic">{liveInterim}</span>"
-                      </p>
+                      <div>
+                        <p className="text-foreground font-medium">
+                          "{liveSpeech} <span className="text-muted-foreground italic">{liveInterim}</span>"
+                        </p>
+                        {micVolume < 10 && (liveInterim || liveSpeech) && (
+                          <p className="text-[10px] text-amber-500/90 font-normal mt-1 flex items-center gap-1">
+                            <span>💡 Tip: Speak slightly closer or louder for maximum clarity</span>
+                          </p>
+                        )}
+                      </div>
                     ) : isSpeechListening && !isMicMuted ? (
                       <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2 space-y-1">
                         <Sparkles className="h-4 w-4 text-primary animate-pulse" />

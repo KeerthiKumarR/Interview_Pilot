@@ -179,8 +179,89 @@ export async function handleProjectRequest(req, res) {
 }
 `;
       }
+    } else if (style !== "dsa") {
+      // Placement Viva anchored to target role and tech stack for candidates who haven't uploaded resume yet
+      let roleRecord = null;
+      if (jobRoleId) {
+        roleRecord = await prisma.jobRole.findUnique({ where: { id: jobRoleId } });
+      }
+      if (!roleRecord) {
+        roleRecord =
+          (await prisma.jobRole.findFirst({ where: { isDefault: true } })) ||
+          (await prisma.jobRole.findFirst({ where: { isActive: true } }));
+      }
+
+      const roleName = studentProfile?.targetRole || roleRecord?.title || "Full Stack Developer";
+      const stackSkills =
+        Array.isArray(studentProfile?.skills) && studentProfile.skills.length > 0
+          ? (studentProfile.skills as string[]).slice(0, 6).join(", ")
+          : roleRecord?.targetSkills || "React, Next.js, Node.js, TypeScript, REST APIs, Databases";
+
+      problemTitle = `${roleName} Placement Viva: Core Tech Stack & Architecture`;
+      problemDescription = `# ${roleName} Placement Viva Dossier
+- **Evaluation Track**: Placement Technical Viva
+- **Target Tech Stack**: ${stackSkills}
+- **Experience Level**: Campus Placement / Fresher
+
+---
+
+### Interview Objectives & Defense Rubric (15–20 Mins):
+1. **Core Language & Framework Fundamentals**:
+   - Component rendering, state flow, asynchronous lifecycle, and error boundaries.
+2. **System Architecture & API Design**:
+   - RESTful API endpoints, request validation, database query optimization, and CORS/auth hygiene.
+3. **Engineering Trade-offs & Production Scaling**:
+   - Caching strategies, handling high concurrency, indexing strategies, and network latency.
+4. **Behavioral & Engineering Ownership**:
+   - Handling production bugs, learning new tech stacks quickly, and team collaboration.
+
+---
+
+### Instructions for Candidate:
+- The AI interviewer will converse with you in real time via voice or chat.
+- Speak naturally or type your responses.
+- Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.
+> *Tip: To personalize future vivas around your exact personal projects and GitHub repos, upload your resume in the **Profile** tab!*`;
+
+      if (language === "python") {
+        starterCode = `# ──────────────────────────────────────────────
+# ${roleName} Placement Viva Scratchpad
+# Language: Python | Stack: ${stackSkills}
+# ──────────────────────────────────────────────
+# Use this scratchpad when the interviewer asks you to write or optimize
+# an API route, helper function, or data transformation.
+
+def handle_request(request_data: dict) -> dict:
+    """
+    Example handler for processing requests.
+    """
+    return {"status": "ok", "role": "${roleName}"}
+`;
+      } else {
+        starterCode = `// ──────────────────────────────────────────────
+// ${roleName} Placement Viva Scratchpad
+// Language: JavaScript / TypeScript | Stack: ${stackSkills}
+// ──────────────────────────────────────────────
+// Use this scratchpad when the interviewer asks you to write or optimize
+// an API endpoint, middleware, or system component.
+
+/**
+ * API handler for ${roleName} Viva
+ * @param {object} req - Incoming request payload
+ * @param {object} res - Response stream
+ */
+export async function handleRequest(req, res) {
+  // Write your implementation here when requested by the interviewer
+  return {
+    success: true,
+    role: "${roleName}",
+    timestamp: Date.now(),
+  };
+}
+`;
+      }
     } else {
-      // Fallback to random coding problem if candidate has not configured profile
+      // Fallback to random coding problem ONLY if user explicitly requested DSA algorithmic track
       let matchingProblems = CODING_PROBLEMS.filter(
         (p) => p.difficulty === difficulty
       );

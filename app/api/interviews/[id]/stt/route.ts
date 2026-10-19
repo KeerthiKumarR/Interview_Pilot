@@ -25,6 +25,10 @@ export async function POST(
         groqFormData.append("model", "whisper-large-v3-turbo");
         groqFormData.append("temperature", "0");
         groqFormData.append("language", "en");
+        groqFormData.append(
+          "prompt",
+          "Technical software engineering placement viva discussing React, Next.js, Node.js, Python, TypeScript, SQL, PostgreSQL, MongoDB, Redis, Docker, REST API endpoints, microservices, system architecture, and trade-offs."
+        );
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
           method: "POST",
