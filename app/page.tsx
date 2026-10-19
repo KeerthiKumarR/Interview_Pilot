@@ -71,7 +71,7 @@ export default async function HomePage() {
           {/* Challenge Badge */}
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3.5 py-1 text-xs font-medium text-primary mb-6 animate-pulse">
             <Sparkles className="size-3.5" />
-            <span>Placement Readiness Challenge · 5 Integrated Modules</span>
+            <span>Mirai Copilot · 5 Integrated Placement Modules</span>
           </div>
 
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-6xl text-balance">
@@ -273,7 +273,7 @@ export default async function HomePage() {
       <footer className="w-full border-t border-border/60 py-6 text-center text-xs text-muted-foreground bg-background">
         <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <span>
-            © {new Date().getFullYear()} Placement Readiness Challenge — MSOT Student Proposal.
+            © {new Date().getFullYear()} Mirai Copilot. All rights reserved.
           </span>
           <div className="flex items-center gap-4 text-xs">
             <Link href="/dashboard/profile-intake" className="hover:underline">Profile Intake</Link>
