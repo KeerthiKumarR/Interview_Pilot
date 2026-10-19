@@ -158,3 +158,44 @@ export async function POST(req: Request) {
     );
   }
 }
+
+/**
+ * DELETE /api/profile
+ * Deletes all stored data about the student (Module 1 privacy requirement:
+ * "The student can see, edit and delete everything stored about them").
+ */
+export async function DELETE() {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.studentProfile.findUnique({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+
+      if (existing) {
+        await tx.studentProject.deleteMany({ where: { profileId: existing.id } });
+        await tx.studentAchievement.deleteMany({ where: { profileId: existing.id } });
+        await tx.profileReview.deleteMany({ where: { profileId: existing.id } });
+        await tx.readinessScore.deleteMany({ where: { profileId: existing.id } });
+        await tx.studentProfile.delete({ where: { id: existing.id } });
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "All stored profile data has been deleted securely.",
+    });
+  } catch (error: any) {
+    console.error("Error deleting student profile:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to delete student profile" },
+      { status: 500 }
+    );
+  }
+}
+

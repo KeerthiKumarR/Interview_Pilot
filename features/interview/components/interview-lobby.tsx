@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Sparkles, Globe } from "lucide-react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { getAvailableVoices, type VoiceOption } from "@/hooks/use-web-speech";
 import { speakTestBackend } from "@/hooks/use-tts";
@@ -62,6 +63,33 @@ export function InterviewLobby({
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
   const camStreamRef = useRef<MediaStream | null>(null);
 
+  // Profile dossier state
+  const [profile, setProfile] = useState<{
+    targetRole?: string | null;
+    skills?: string[];
+    projects?: Array<{
+      title: string;
+      liveUrl?: string | null;
+      repoUrl?: string | null;
+      techStack?: any;
+    }>;
+  } | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!ignore && data?.profile) {
+          setProfile(data.profile);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const mode = useInterviewStore((s) => s.mode);
   const setMode = useInterviewStore((s) => s.setMode);
   const interviewId = useInterviewStore((s) => s.interviewId);
@@ -106,7 +134,8 @@ export function InterviewLobby({
       const voiceExists = available.some((v) => v.id === currentVoice);
 
       if (!voiceExists && available.length > 0) {
-        setSelectedVoiceId(available[0].id);
+        const defaultAnanya = available.find((v) => v.name === "Ananya") || available.find((v) => v.gender === "female") || available[0];
+        setSelectedVoiceId(defaultAnanya.id);
       }
     };
 
@@ -418,13 +447,13 @@ export function InterviewLobby({
                           onChange={(e) => setSelectedVoiceId(e.target.value)}
                           className="mt-1 block w-full rounded-md border-0 py-1 pl-2 pr-8 text-[11px] text-muted-foreground bg-secondary focus:ring-1 focus:ring-primary outline-none cursor-pointer truncate"
                         >
-                          <optgroup label="Male Voices">
-                            {voices.filter(v => v.gender === "male").map(v => (
+                          <optgroup label="Female Voices (Default: Ananya)">
+                            {voices.filter(v => v.gender === "female").map(v => (
                               <option key={v.id} value={v.id}>{v.label}</option>
                             ))}
                           </optgroup>
-                          <optgroup label="Female Voices">
-                            {voices.filter(v => v.gender === "female").map(v => (
+                          <optgroup label="Male Voices">
+                            {voices.filter(v => v.gender === "male").map(v => (
                               <option key={v.id} value={v.id}>{v.label}</option>
                             ))}
                           </optgroup>
@@ -463,54 +492,119 @@ export function InterviewLobby({
               </div>
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-6">
-              {/* Interview Style Selection */}
+            {/* Right Column: Placement Viva Dossier & Evaluation Structure */}
+            <div className="space-y-5">
+              {/* Profile Anchor Dossier Card */}
               <div>
-                <h3 className="mb-3 text-sm font-medium text-foreground">3. Interview Style</h3>
-                <select
-                  value={interviewStyle}
-                  onChange={(e) => setInterviewStyle(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="Standard">Standard</option>
-                  <option value="Product-company (DSA)">Product-company (DSA)</option>
-                  <option value="Startup (Practical/System)">Startup (Practical/System)</option>
-                  <option value="Service-company (Fundamentals)">Service-company (Fundamentals)</option>
-                </select>
-              </div>
-              
-              {/* Structure Section */}
-              <div>
-                <h3 className="mb-3 text-sm font-medium text-foreground">Interview Structure</h3>
-                <div className="rounded-lg border border-border bg-background p-4">
-                  <p className="mb-4 text-sm text-muted-foreground">
-                    Your {duration}-minute interview will follow this format:
-                  </p>
-                  
-                  <div className="relative border-l border-border ml-2 pl-4 space-y-6">
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-blue-500 ring-4 ring-background" />
-                      <h4 className="text-sm font-medium text-foreground">1. Introduction</h4>
-                      <p className="text-xs text-muted-foreground">~{introTime} min • Clarify the problem</p>
-                    </div>
-                    
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-purple-500 ring-4 ring-background" />
-                      <h4 className="text-sm font-medium text-foreground">2. Problem Solving</h4>
-                      <p className="text-xs text-muted-foreground">~{problemTime} min • Discuss approach & complexity</p>
-                    </div>
-                    
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-background" />
-                      <h4 className="text-sm font-medium text-foreground">3. Coding & Testing</h4>
-                      <p className="text-xs text-muted-foreground">~{codeTime} min • Implement and run tests</p>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="size-4 text-primary" />
+                    <span>3. Placement Dossier Anchored</span>
+                  </h3>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Verified
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-background/80 border border-border/50 p-2">
+                      <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                        Target Role
+                      </span>
+                      <span className="font-semibold text-foreground truncate block mt-0.5">
+                        {profile?.targetRole || "Software Engineer"}
+                      </span>
                     </div>
 
+                    <div className="rounded-lg bg-background/80 border border-border/50 p-2">
+                      <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                        Project in Defense
+                      </span>
+                      <div className="flex items-center gap-1 mt-0.5 truncate">
+                        <span className="font-semibold text-foreground truncate">
+                          {profile?.projects?.[0]?.title || "Skills & Track Defense"}
+                        </span>
+                        {profile?.projects?.[0]?.liveUrl && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500 font-medium shrink-0 ml-1">
+                            <Globe className="size-2.5" />
+                            Live
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {Array.isArray(profile?.skills) && profile.skills.length > 0 && (
+                    <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                      <span className="text-[10px] text-muted-foreground">Probed Stack:</span>
+                      {profile.skills.slice(0, 4).map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-muted-foreground leading-tight pt-0.5">
+                    The AI interviewer will probe your actual project architecture, API latency, and tech stack decisions.
+                  </p>
+                </div>
+              </div>
+
+              {/* Placement Viva Structure */}
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-foreground">
+                  Viva Evaluation Format ({duration} Mins)
+                </h3>
+                <div className="rounded-xl border border-border bg-background p-3.5">
+                  <div className="relative border-l border-border/80 ml-2 pl-4 space-y-4">
+                    {/* Stage 1 */}
                     <div className="relative">
-                      <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background" />
-                      <h4 className="text-sm font-medium text-foreground">4. Wrap-up</h4>
-                      <p className="text-xs text-muted-foreground">~{wrapTime} min • Final optimization thoughts</p>
+                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-blue-500 ring-4 ring-background" />
+                      <h4 className="text-xs font-semibold text-foreground">
+                        1. Profile & Experience Intro
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        ~{introTime} min • Background review, achievements, & role motivation
+                      </p>
+                    </div>
+
+                    {/* Stage 2 */}
+                    <div className="relative">
+                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-purple-500 ring-4 ring-background" />
+                      <h4 className="text-xs font-semibold text-foreground">
+                        2. Project Defense & Architecture
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        ~{problemTime} min • Deep probe into {profile?.projects?.[0]?.title || "project architecture"}, API latency, & DB schema
+                      </p>
+                    </div>
+
+                    {/* Stage 3 */}
+                    <div className="relative">
+                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-background" />
+                      <h4 className="text-xs font-semibold text-foreground">
+                        3. System Trade-offs & Code
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        ~{codeTime} min • Live technical problem solving & modularity discussion
+                      </p>
+                    </div>
+
+                    {/* Stage 4 */}
+                    <div className="relative">
+                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background" />
+                      <h4 className="text-xs font-semibold text-foreground">
+                        4. Recruiter Verdict & Scorecard
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        ~{wrapTime} min • Placement tier evaluation (0–100) & top 5 fixes
+                      </p>
                     </div>
                   </div>
                 </div>

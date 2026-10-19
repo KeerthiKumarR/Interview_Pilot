@@ -3,6 +3,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 const DEFAULT_ADMIN_EMAILS = [
   "ghodakepravin153@gmail.com",
   "ghodakepravin154@gmail.com",
+  "rvkeerthi99@gmail.com",
 ];
 
 /**

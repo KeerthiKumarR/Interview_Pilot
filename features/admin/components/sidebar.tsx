@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AdminNotificationBell } from "./admin-notification-system";
 import { SettingsModal } from "./settings-modal";
+import { MiraiLogo } from "@/components/mirai-logo";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -81,9 +82,12 @@ export function Sidebar() {
           <div className="p-4 border-b border-border flex items-center justify-between gap-2">
             <Link
               href="/dashboard"
-              className="text-base font-bold tracking-tight text-foreground hover:opacity-80 truncate"
+              className="flex items-center gap-2 hover:opacity-85 transition-opacity truncate"
             >
-              AlgoPilot<span className="text-primary">.Admin</span>
+              <MiraiLogo size={24} />
+              <span className="text-base font-bold tracking-tight text-foreground truncate">
+                Mirai<span className="text-primary font-semibold">.Admin</span>
+              </span>
             </Link>
             <div className="flex items-center gap-1.5 shrink-0">
               <AdminNotificationBell />

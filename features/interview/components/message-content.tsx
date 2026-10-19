@@ -9,11 +9,14 @@ import remarkGfm from "remark-gfm";
  */
 function sanitizeChatText(text: string): string {
   if (!text) return "";
-  // Fix unclosed bold asterisks or clean raw double asterisks if stray
   return text
+    .replace(/\[STAGE:\s*[1-4]\]/gi, "")
+    .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
+    .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
     .replace(/\*\*(.*?)\*\*/g, "$1") // Strip bold asterisks for clean text presentation
     .replace(/\\\*/g, "")            // Remove escaped asterisks
-    .replace(/\*{2,}/g, "");         // Remove stray **
+    .replace(/\*{2,}/g, "")         // Remove stray **
+    .trim();
 }
 
 export function MessageContent({ content, isUser }: { content: string; isUser?: boolean }) {

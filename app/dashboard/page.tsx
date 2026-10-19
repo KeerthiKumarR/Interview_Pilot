@@ -77,42 +77,100 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="mx-auto max-w-4xl px-6 py-10 space-y-8">
       {/* Welcome + CTA */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">Placement Readiness Copilot</h1>
+            <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              MSOT
+            </span>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Practice coding interviews with an AI interviewer.
+            Complete your profile, run the benchmark review, practice your 15–20 min AI viva, and track job applications.
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <Link
-            href="/dashboard/profile-intake"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors"
-          >
-            Profile Intake
-          </Link>
-          <Link
-            href="/dashboard/review"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors"
-          >
-            Review Hub
-          </Link>
-          <Link
-            href="/dashboard/readiness"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors"
-          >
-            Readiness Score
-          </Link>
-          <Link
-            href="/dashboard/jobs"
-            className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted transition-colors"
-          >
-            Jobs & Drives
-          </Link>
+        <div className="flex items-center gap-2 shrink-0">
           <StartInterviewButton />
         </div>
+      </div>
+
+      {/* 5-Module Placement Flow Navigation */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <Link
+          href="/dashboard/profile-intake"
+          className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
+        >
+          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider block mb-1">
+            Module 1
+          </span>
+          <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors block">
+            Profile Intake
+          </span>
+          <span className="text-[11px] text-muted-foreground mt-1 block">
+            Resume, GitHub, LeetCode
+          </span>
+        </Link>
+
+        <Link
+          href="/dashboard/review"
+          className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
+        >
+          <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider block mb-1">
+            Module 2
+          </span>
+          <span className="text-xs font-semibold text-foreground group-hover:text-blue-500 transition-colors block">
+            Review Engine
+          </span>
+          <span className="text-[11px] text-muted-foreground mt-1 block">
+            Benchmarks & Rewrites
+          </span>
+        </Link>
+
+        <div
+          className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 flex flex-col justify-between"
+        >
+          <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider block mb-1">
+            Module 3
+          </span>
+          <span className="text-xs font-semibold text-foreground block">
+            Mock Interview
+          </span>
+          <span className="text-[11px] text-muted-foreground mt-1 block">
+            15–20 Min Speech Viva
+          </span>
+        </div>
+
+        <Link
+          href="/dashboard/readiness"
+          className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
+        >
+          <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider block mb-1">
+            Module 4
+          </span>
+          <span className="text-xs font-semibold text-foreground group-hover:text-emerald-500 transition-colors block">
+            Readiness Score
+          </span>
+          <span className="text-[11px] text-muted-foreground mt-1 block">
+            0–100 & Top 5 Fixes
+          </span>
+        </Link>
+
+        <Link
+          href="/dashboard/jobs"
+          className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between col-span-2 sm:col-span-1"
+        >
+          <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider block mb-1">
+            Module 5
+          </span>
+          <span className="text-xs font-semibold text-foreground group-hover:text-purple-500 transition-colors block">
+            Jobs & Drives
+          </span>
+          <span className="text-[11px] text-muted-foreground mt-1 block">
+            Boolean Search & Board
+          </span>
+        </Link>
       </div>
 
       {/* Performance Trend (Horizontally scrollable if > 10 interviews) */}

@@ -11,6 +11,8 @@ import {
   FileCheck2,
   ShieldCheck,
   UserCheck,
+  Trash2,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,10 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import {
+  ChatIntakeAssistant,
+  type ExtractedProfileData,
+} from "@/features/profile/components/chat-intake-assistant";
 import { ResumeDropzone } from "@/features/profile/components/resume-dropzone";
 import { SocialLinksForm } from "@/features/profile/components/social-links-form";
 import { SkillsInput } from "@/features/profile/components/skills-input";
@@ -56,6 +62,104 @@ export default function ProfileIntakePage() {
   const [achievements, setAchievements] = useState<StudentAchievementData[]>([]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showChatAssistant, setShowChatAssistant] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Apply extracted data from Chat Intake Assistant (Module 1 specification)
+  const handleApplyExtracted = useCallback((extracted: ExtractedProfileData) => {
+    if (!extracted) return;
+    if (extracted.targetRole) setTargetRole(extracted.targetRole);
+    if (extracted.githubUsername) setGithubUsername(extracted.githubUsername);
+    if (extracted.leetcodeUsername) setLeetcodeUsername(extracted.leetcodeUsername);
+    if (extracted.linkedinUrl) setLinkedinUrl(extracted.linkedinUrl);
+    if (extracted.linkedinAbout) setLinkedinAbout(extracted.linkedinAbout);
+
+    if (Array.isArray(extracted.skills) && extracted.skills.length > 0) {
+      setSkills((prev) => {
+        const next = [...prev];
+        for (const s of extracted.skills || []) {
+          if (!next.some((item) => item.toLowerCase() === s.toLowerCase())) {
+            next.push(s);
+          }
+        }
+        return next;
+      });
+    }
+
+    if (Array.isArray(extracted.projects) && extracted.projects.length > 0) {
+      setProjects((prev) => {
+        const existingTitles = new Set(prev.map((p) => p.title.toLowerCase()));
+        const newOnes = (extracted.projects || []).filter(
+          (p) => p.title && !existingTitles.has(p.title.toLowerCase())
+        );
+        return [...prev, ...newOnes];
+      });
+    }
+
+    if (Array.isArray(extracted.achievements) && extracted.achievements.length > 0) {
+      setAchievements((prev) => {
+        const existingTitles = new Set(prev.map((a) => a.title.toLowerCase()));
+        const validCategories = ["hackathon", "certification", "club", "award", "other"] as const;
+        type AchCategory = (typeof validCategories)[number];
+
+        const newOnes: StudentAchievementData[] = (extracted.achievements || [])
+          .filter((a) => a.title && !existingTitles.has(a.title.toLowerCase()))
+          .map((a) => {
+            const rawCat = (a.category || "").toLowerCase() as AchCategory;
+            const category: AchCategory = validCategories.includes(rawCat) ? rawCat : "other";
+            return {
+              title: a.title,
+              category,
+              description: a.description,
+              date: a.date,
+            };
+          });
+        return [...prev, ...newOnes];
+      });
+    }
+  }, []);
+
+  // Delete all stored profile data (Privacy compliance per Module 1 rule:
+  // "The student can see, edit and delete everything stored about them")
+  const handleDeleteProfile = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to delete all stored profile and review data? This action cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch("/api/profile", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete profile.");
+      }
+
+      // Reset all local form state
+      setTargetRole("Full Stack Developer");
+      setResumeFileName(null);
+      setResumeText(null);
+      setResumePageCount(null);
+      setGithubUsername("");
+      setLeetcodeUsername("");
+      setLinkedinUrl("");
+      setLinkedinAbout("");
+      setSkills([]);
+      setDetectedSkillsPool([]);
+      setProjects([]);
+      setAchievements([]);
+      setLastSavedAt(null);
+      toast.success("All stored profile data has been securely deleted.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete profile data.";
+      toast.error(msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // 1. Fetch existing profile on mount
   useEffect(() => {
@@ -281,22 +385,39 @@ export default function ProfileIntakePage() {
       ) : (
         <div className="space-y-8">
           {/* Header Title & Pitch */}
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Profile Intake Hub
-              </h1>
-              <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                <Sparkles className="size-3" />
-                Adaptive Prep
-              </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Profile Intake Hub
+                </h1>
+                <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                  <Sparkles className="size-3" />
+                  Module 1: Intake
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Talk to the AI assistant or upload your documents. The copilot extracts your
+                skills, projects, and handles to customize your mock interview and calculate your readiness score.
+              </p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Upload your resume and connect your coding profiles. Our AI interviewer
-              will craft personalized technical questions, system architecture scenarios,
-              and behavioral deep-dives tailored to your exact stack.
-            </p>
+
+            <Button
+              type="button"
+              variant={showChatAssistant ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowChatAssistant(!showChatAssistant)}
+              className="gap-1.5 shrink-0"
+            >
+              <Bot className="size-3.5" />
+              {showChatAssistant ? "Hide Chat Assistant" : "Talk to AI Assistant"}
+            </Button>
           </div>
+
+          {/* Module 1: Conversational Chat Intake Assistant */}
+          {showChatAssistant && (
+            <ChatIntakeAssistant onApplyExtracted={handleApplyExtracted} />
+          )}
 
           {/* Section 1: Resume Upload */}
           <Card>
@@ -407,13 +528,28 @@ export default function ProfileIntakePage() {
 
           {/* Action Bar / Save */}
           <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-xs">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="size-3.5" />
-              Discard changes and return
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="size-3.5" />
+                Return to Dashboard
+              </Link>
+
+              <span className="text-border">|</span>
+
+              <button
+                type="button"
+                onClick={handleDeleteProfile}
+                disabled={isDeleting || isSaving}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors cursor-pointer"
+                title="Deletes all your stored profile data, projects, achievements, and review reports from the database"
+              >
+                <Trash2 className="size-3.5" />
+                {isDeleting ? "Deleting Data..." : "Delete All Stored Data"}
+              </button>
+            </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <Button

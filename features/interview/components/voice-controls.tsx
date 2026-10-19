@@ -206,10 +206,10 @@ export function VoiceControls() {
           {showVoicePicker && (
             <div className="absolute bottom-full left-0 mb-1 min-w-[180px] rounded-lg border border-border bg-background shadow-xl z-50">
               <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                Male Voices
+                Female Voices (Default: Ananya)
               </div>
               {voices
-                .filter((v) => v.gender === "male")
+                .filter((v) => v.gender === "female")
                 .map((v) => (
                   <button
                     key={v.id}
@@ -234,10 +234,10 @@ export function VoiceControls() {
                   </button>
                 ))}
               <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 border-t border-border">
-                Female Voices
+                Male Voices
               </div>
               {voices
-                .filter((v) => v.gender === "female")
+                .filter((v) => v.gender === "male")
                 .map((v) => (
                   <button
                     key={v.id}

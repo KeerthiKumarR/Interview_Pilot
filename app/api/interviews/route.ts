@@ -76,68 +76,167 @@ export async function POST(req: Request) {
       }
     }
 
-    // Select a random problem matching the difficulty
-    let matchingProblems = CODING_PROBLEMS.filter(
-      (p) => p.difficulty === difficulty
-    );
-
-    if (matchingProblems.length === 0) {
-      return NextResponse.json(
-        { error: "No problems available for this difficulty" },
-        { status: 404 }
-      );
-    }
-
-    // Question bank hygiene: avoid repeating problems the user has already seen
-    const pastInterviews = await prisma.interview.findMany({
+    // Check if the user has an active Student Profile (Module 1 Intake)
+    const studentProfile = await prisma.studentProfile.findUnique({
       where: { userId: user.id },
-      select: { problemTitle: true },
+      include: {
+        projects: { orderBy: { order: "asc" } },
+        achievements: { orderBy: { createdAt: "desc" } },
+      },
     });
-    
-    const pastTitles = new Set(pastInterviews.map((i) => i.problemTitle));
-    const newProblems = matchingProblems.filter(p => !pastTitles.has(p.title));
-    
-    // If they've done all problems of this difficulty, fallback to repeating
-    if (newProblems.length > 0) {
-      matchingProblems = newProblems;
+
+    let problemTitle: string;
+    let problemDescription: string;
+    let starterCode: string;
+
+    if (studentProfile && (personalizeWithProfile || (studentProfile.projects && studentProfile.projects.length > 0))) {
+      const roleName = studentProfile.targetRole || "Full Stack Developer";
+      const primaryProj = studentProfile.projects?.[0];
+      const projectTitle = primaryProj?.title?.trim();
+      const liveUrl = primaryProj?.liveUrl?.trim();
+      const repoUrl = primaryProj?.repoUrl?.trim();
+      const stackList = Array.isArray(primaryProj?.techStack) && primaryProj.techStack.length > 0
+        ? primaryProj.techStack.join(", ")
+        : Array.isArray(studentProfile.skills) && studentProfile.skills.length > 0
+          ? (studentProfile.skills as string[]).slice(0, 5).join(", ")
+          : "";
+
+      problemTitle = projectTitle
+        ? `${roleName} Placement Viva: ${projectTitle}`
+        : `${roleName} Placement Viva`;
+
+      const projectSections: string[] = [];
+      if (projectTitle) {
+        projectSections.push(`## Featured Project in Scope: ${projectTitle}`);
+      }
+      if (liveUrl) {
+        projectSections.push(`- **Live Deployment**: ${liveUrl}`);
+      }
+      if (repoUrl) {
+        projectSections.push(`- **Source Code Repository**: ${repoUrl}`);
+      }
+      if (stackList) {
+        projectSections.push(`- **Verified Tech Stack**: ${stackList}`);
+      }
+
+      problemDescription = `# ${roleName} Placement Viva Dossier
+${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
+### Interview Objectives & Defense Rubric (15–20 Mins):
+1. **System Architecture & Data Flow**:
+   - Component hierarchy, state hydration, and client-server boundaries.
+   - Database schema design, document relationships, and indexing strategies.
+2. **API Design & Network Latency**:
+   - RESTful API endpoints, request/response lifecycle, and middleware architecture.
+   - Error boundary handling, response validation, and CORS hygiene.
+3. **Engineering Trade-offs & Production Scaling**:
+   - Caching strategies, handling stream buffering, and database connection pooling.
+   - Code modularity, clean architecture, and technical debt management.
+4. **Behavioral & Hackathon Ownership**:
+   - STAR-method evaluation on handling production bugs, deadline pressure, and execution.
+
+---
+
+### Instructions for Candidate:
+- The AI interviewer will converse with you in real time via speech or text.
+- Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.`;
+
+      const projectRef = projectTitle || "Application";
+      if (language === "python") {
+        starterCode = `# ──────────────────────────────────────────────
+# ${roleName} Viva Scratchpad
+# Language: Python
+# ──────────────────────────────────────────────
+# Use this scratchpad when the interviewer asks you to write or optimize
+# an API route, helper function, or data transformation.
+
+def handle_request(request_data: dict) -> dict:
+    """
+    Example handler for processing ${projectRef} requests.
+    """
+    # Write your implementation here when requested
+    return {"status": "ok", "project": "${projectRef}"}
+`;
+      } else {
+        starterCode = `// ──────────────────────────────────────────────
+// ${roleName} Viva Scratchpad
+// Language: JavaScript / TypeScript ${stackList ? `(${stackList})` : ""}
+// ──────────────────────────────────────────────
+// Use this scratchpad when the interviewer asks you to write or optimize
+// an API endpoint, middleware, or system component for ${projectRef}.
+
+/**
+ * API handler for ${projectRef}
+ * @param {object} req - Incoming request payload
+ * @param {object} res - Response stream
+ */
+export async function handleProjectRequest(req, res) {
+  // Write your implementation here when requested by the interviewer
+  return {
+    success: true,
+    project: "${projectRef}",
+    timestamp: Date.now(),
+  };
+}
+`;
+      }
+    } else {
+      // Fallback to random coding problem if candidate has not configured profile
+      let matchingProblems = CODING_PROBLEMS.filter(
+        (p) => p.difficulty === difficulty
+      );
+
+      if (matchingProblems.length === 0) {
+        matchingProblems = CODING_PROBLEMS;
+      }
+
+      // Avoid repeating problems the user has already seen
+      const pastInterviews = await prisma.interview.findMany({
+        where: { userId: user.id },
+        select: { problemTitle: true },
+      });
+      
+      const pastTitles = new Set(pastInterviews.map((i) => i.problemTitle));
+      const newProblems = matchingProblems.filter(p => !pastTitles.has(p.title));
+      
+      if (newProblems.length > 0) {
+        matchingProblems = newProblems;
+      }
+
+      const problem =
+        matchingProblems[Math.floor(Math.random() * matchingProblems.length)];
+
+      const lang = language as keyof typeof problem.starterCode;
+      starterCode =
+        problem.starterCode[lang] ??
+        (language === "typescript" ? problem.starterCode["javascript"] : "") ??
+        "";
+
+      problemTitle = problem.title;
+      problemDescription = [
+        problem.description,
+        "",
+        ...problem.examples.map(
+          (ex, i) =>
+            `Example ${i + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}${ex.explanation ? `\nExplanation: ${ex.explanation}` : ""}`
+        ),
+        "",
+        "Constraints:",
+        ...problem.constraints.map((c) => `  - ${c}`),
+      ].join("\n");
     }
 
-    const problem =
-      matchingProblems[Math.floor(Math.random() * matchingProblems.length)];
-
-    // Get the starter code for the selected language
-    // TypeScript falls back to JavaScript starter code if not available
-    const lang = language as keyof typeof problem.starterCode;
-    const starterCode =
-      problem.starterCode[lang] ??
-      (language === "typescript" ? problem.starterCode["javascript"] : "") ??
-      "";
-
-    // Build problem description with examples and constraints
-    const descriptionParts = [
-      problem.description,
-      "",
-      ...problem.examples.map(
-        (ex, i) =>
-          `Example ${i + 1}:\nInput: ${ex.input}\nOutput: ${ex.output}${ex.explanation ? `\nExplanation: ${ex.explanation}` : ""}`
-      ),
-      "",
-      "Constraints:",
-      ...problem.constraints.map((c) => `  - ${c}`),
-    ];
-
-    // Create the interview record
+    // Create the interview record (do not attach legacy seed jobRoleId if personalized viva)
     const interview = await prisma.interview.create({
       data: {
         userId: user.id,
-        jobRoleId: jobRoleId || null,
+        jobRoleId: studentProfile ? null : (jobRoleId || null),
         language,
         difficulty,
         style,
         duration,
         status: "setup",
-        problemTitle: problem.title,
-        problemDescription: descriptionParts.join("\n"),
+        problemTitle,
+        problemDescription,
         code: starterCode,
       },
     });

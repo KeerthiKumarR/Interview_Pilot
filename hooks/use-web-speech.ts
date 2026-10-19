@@ -4,8 +4,10 @@ import { useEffect, useRef, useCallback, useState } from "react";
 
 interface UseWebSpeechOptions {
   onResult: (transcript: string) => void;
+  onInterimResult?: (interim: string) => void;
   onError?: (error: string) => void;
   continuous?: boolean;
+  interimResults?: boolean;
   language?: string;
 }
 
@@ -20,8 +22,10 @@ interface UseWebSpeechOptions {
  */
 export function useWebSpeech({
   onResult,
+  onInterimResult,
   onError,
   continuous = true,
+  interimResults = false,
   language = "en-US",
 }: UseWebSpeechOptions) {
   const [isListening, setIsListening] = useState(false);
@@ -37,12 +41,14 @@ export function useWebSpeech({
 
   // Store callbacks in refs to avoid stale closures
   const onResultRef = useRef(onResult);
+  const onInterimResultRef = useRef(onInterimResult);
   const onErrorRef = useRef(onError);
 
   useEffect(() => {
     onResultRef.current = onResult;
+    onInterimResultRef.current = onInterimResult;
     onErrorRef.current = onError;
-  }, [onResult, onError]);
+  }, [onResult, onInterimResult, onError]);
 
   /**
    * Safely abort and discard the current recognition instance.
@@ -80,7 +86,7 @@ export function useWebSpeech({
 
     const recognition = new SpeechRecognitionAPI();
     recognition.continuous = continuous;
-    recognition.interimResults = false;
+    recognition.interimResults = interimResults;
     recognition.lang = language;
 
     // Capture session ID for this start cycle
@@ -91,12 +97,23 @@ export function useWebSpeech({
       // If stopped since we started, ignore
       if (stoppedRef.current) return;
 
-      const last = event.results[event.results.length - 1];
-      if (last.isFinal) {
-        const transcript = last[0].transcript.trim();
-        if (transcript) {
-          onResultRef.current(transcript);
+      let interim = "";
+      let final = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const item = event.results[i];
+        if (item.isFinal) {
+          final += item[0].transcript;
+        } else {
+          interim += item[0].transcript;
         }
+      }
+
+      if (interim.trim() && onInterimResultRef.current) {
+        onInterimResultRef.current(interim.trim());
+      }
+      if (final.trim() && onResultRef.current) {
+        onResultRef.current(final.trim());
       }
     };
 
@@ -249,6 +266,70 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
 }
 
 /**
+ * Guaranteed selector for natural female voices (prioritizing Indian English and clear female voices).
+ * Ensures Ananya never sounds like a deep male voice.
+ */
+export function getBestFemaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const list = voices && voices.length > 0 ? voices : window.speechSynthesis.getVoices();
+  if (!list || list.length === 0) return null;
+
+  // Strict list of known male voice identifiers to never assign to Ananya
+  const maleNames = [
+    "aman", "rishi", "prabhat", "aarav", "rohan", "vikram", "kabir", "aditya",
+    "dev", "neer", "siddharth", "varun", "alex", "fred", "daniel", "david",
+    "george", "male", "albert", "ralph", "tom", "oliver", "bruce", "junior",
+    "eddy", "reed", "rocko", "grandpa", "bad news", "bahh", "bells", "boing",
+    "bubbles", "cellos", "jester", "organ", "superstar", "trinoids", "wobble", "whisper", "zarvox"
+  ];
+
+  const isMaleVoice = (voiceName: string) => {
+    const lower = voiceName.toLowerCase();
+    return maleNames.some((m) => lower.includes(m));
+  };
+
+  // 1. High priority: Verified Indian English female voices (fits Senior Interviewer Ananya)
+  // macOS includes "Tara" (en_IN), Windows/Chrome often includes "Veena", "Sangeeta", "Aditi", "Lekha"
+  const indianFemaleNames = ["tara", "veena", "sangeeta", "ananya", "aditi", "lekha", "kavya", "diya", "priya", "pooja", "female"];
+  const indianFemale = list.find((v) => {
+    const n = v.name.toLowerCase();
+    const l = v.lang.toLowerCase();
+    const isIndian = l.includes("en-in") || l.includes("en_in") || n.includes("india");
+    return isIndian && indianFemaleNames.some((female) => n.includes(female)) && !isMaleVoice(n);
+  });
+  if (indianFemale) return indianFemale;
+
+  // 2. High-quality standard female voices on macOS, Windows, Chrome, Edge
+  const standardFemaleNames = [
+    "samantha", "victoria", "karen", "kathy", "shelley", "flo", "sandy",
+    "moira", "tessa", "fiona", "zira", "hazel", "siri", "catherine",
+    "allison", "ava", "stephanie", "zoe", "google us english",
+    "google uk english female", "microsoft zira", "jenny", "aria"
+  ];
+  for (const name of standardFemaleNames) {
+    const v = list.find((voice) => {
+      const n = voice.name.toLowerCase();
+      return n.includes(name) && !isMaleVoice(n);
+    });
+    if (v) return v;
+  }
+
+  // 3. Any voice explicitly tagged 'female' in its name (not matching male)
+  const taggedFemale = list.find((v) => v.name.toLowerCase().includes("female") && !isMaleVoice(v.name));
+  if (taggedFemale) return taggedFemale;
+
+  // 4. Any English voice that is definitely not a male voice
+  const nonMaleEnglish = list.find((v) => {
+    const n = v.name.toLowerCase();
+    const l = v.lang.toLowerCase();
+    return l.startsWith("en") && !isMaleVoice(n);
+  });
+  if (nonMaleEnglish) return nonMaleEnglish;
+
+  return list[0] || null;
+}
+
+/**
  * Speak text aloud using Web Speech Synthesis API ($0 cost).
  * Includes workaround for Chrome's cancel-before-speak bug.
  *
@@ -286,17 +367,21 @@ export function speak(
   setTimeout(() => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = options?.rate ?? 1.0;
-    utterance.pitch = options?.pitch ?? 1.0;
+    utterance.pitch = options?.pitch ?? 1.1; // Friendly female pitch default
     utterance.lang = options?.lang ?? "en-US";
 
     const voices = window.speechSynthesis.getVoices();
 
-    // Use specific voice if voiceName is provided
+    // Use specific voice if voiceName is provided, otherwise guaranteed best female voice
+    let selectedVoice: SpeechSynthesisVoice | null = null;
     if (options?.voiceName) {
-      const selectedVoice = voices.find((v) => v.name === options.voiceName);
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
+      selectedVoice = voices.find((v) => v.name === options.voiceName) || null;
+    }
+    if (!selectedVoice) {
+      selectedVoice = getBestFemaleVoice(voices);
+    }
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
     }
 
     let keepAliveInterval: ReturnType<typeof setInterval> | null = null;
@@ -316,7 +401,14 @@ export function speak(
 
     utterance.onerror = (event) => {
       cleanup();
-      console.error("SpeechSynthesis error:", event);
+      // "canceled", "interrupted", and "not-allowed" (autoplay restriction) are normal browser events
+      if (
+        event.error !== "canceled" &&
+        event.error !== "interrupted" &&
+        event.error !== "not-allowed"
+      ) {
+        console.warn("SpeechSynthesis event:", event.error);
+      }
       options?.onError?.();
     };
 
@@ -335,7 +427,7 @@ export function speak(
       window.speechSynthesis.pause();
       window.speechSynthesis.resume();
     }, 10000);
-  }, 150);
+  }, 20);
 }
 
 /**

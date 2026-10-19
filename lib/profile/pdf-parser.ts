@@ -1,5 +1,3 @@
-import { PDFParse } from "pdf-parse";
-
 export interface ParsedResumeResult {
   text: string;
   pageCount: number;
@@ -107,25 +105,63 @@ function extractFallbackTextFromBuffer(buffer: Buffer): { text: string; pageCoun
   }
 }
 
+import { spawn } from "child_process";
+import path from "path";
+
+function extractPdfWithNodeScript(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.resolve(process.cwd(), "scripts/parse-pdf.mjs");
+    const child = spawn(process.execPath, [scriptPath], {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        return reject(new Error(stderr || `PDF script exited with code ${code}`));
+      }
+      try {
+        const parsed = JSON.parse(stdout);
+        resolve({
+          text: parsed.text || "",
+          pageCount: parsed.pageCount || 1,
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    child.on("error", (err) => {
+      reject(err);
+    });
+
+    child.stdin.end(buffer);
+  });
+}
+
 /**
  * Extracts plain text, page count, links, and detected skills from a PDF buffer.
  */
 export async function parseResumePdf(buffer: Buffer): Promise<ParsedResumeResult> {
-  let parser: PDFParse | null = null;
   let text = "";
   let pageCount = 1;
 
   try {
-    parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
+    const result = await extractPdfWithNodeScript(buffer);
     text = (result.text || "").trim();
-    pageCount = result.pages?.length || 1;
+    pageCount = result.pageCount || 1;
   } catch (error: any) {
-    console.warn("Primary PDFParse getText failed, attempting fallback:", error.message);
-  } finally {
-    if (parser) {
-      await parser.destroy().catch(() => {});
-    }
+    console.warn("Primary Node PDF extraction failed, attempting fallback:", error.message);
   }
 
   // If primary parser returned minimal text (under 50 chars), trigger fallback stream decoder

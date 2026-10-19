@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// ─── High-Performance Server-Side LRU Audio Cache ─────────────────────────
+interface CachedAudioEntry {
+  buffer: Buffer;
+  contentType: string;
+}
+
+const ttsMemoryCache = new Map<string, CachedAudioEntry>();
+const MAX_SERVER_AUDIO_CACHE = 120;
+
+let cachedOpenRouterKey: string | null = process.env.OPENROUTER_API_KEY || null;
+let lastKeyFetchTime = 0;
+let cachedTtsModelSetting: string | null = null;
+let lastModelSettingFetchTime = 0;
+const SETTING_CACHE_TTL = 60000; // 60s
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -32,13 +47,18 @@ export async function POST(
       return NextResponse.json({ error: "Empty text after sanitization" }, { status: 400 });
     }
 
-    let openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    if (!openRouterApiKey) {
+    const now = Date.now();
+    let openRouterApiKey = process.env.OPENROUTER_API_KEY || cachedOpenRouterKey;
+    if (!openRouterApiKey || now - lastKeyFetchTime > SETTING_CACHE_TTL) {
       try {
         const dbKey = await prisma.systemSetting.findUnique({
           where: { key: "OPENROUTER_API_KEY" },
         });
-        if (dbKey?.value) openRouterApiKey = dbKey.value;
+        if (dbKey?.value) {
+          cachedOpenRouterKey = dbKey.value;
+          openRouterApiKey = dbKey.value;
+        }
+        lastKeyFetchTime = now;
       } catch {}
     }
 
@@ -74,16 +94,32 @@ export async function POST(
       }
     }
 
-    // Check if Admin has configured an explicit TTS_MODEL override in DB
-    try {
-      const dbTtsModelSetting = await prisma.systemSetting.findUnique({
-        where: { key: "TTS_MODEL" },
+    // Check if Admin has configured an explicit TTS_MODEL override in DB (cached 60s)
+    if (now - lastModelSettingFetchTime > SETTING_CACHE_TTL) {
+      try {
+        const dbTtsModelSetting = await prisma.systemSetting.findUnique({
+          where: { key: "TTS_MODEL" },
+        });
+        cachedTtsModelSetting = dbTtsModelSetting?.value || null;
+        lastModelSettingFetchTime = now;
+      } catch {}
+    }
+    if (cachedTtsModelSetting && cachedTtsModelSetting !== "auto") {
+      targetModel = cachedTtsModelSetting;
+    }
+
+    // ─── 🚀 In-Memory LRU Audio Cache Check (Sub-Millisecond Return) ───────
+    const cacheKey = `${targetModel}:${targetVoice}:${text}`;
+    const cachedEntry = ttsMemoryCache.get(cacheKey);
+    if (cachedEntry) {
+      return new NextResponse(new Uint8Array(cachedEntry.buffer), {
+        status: 200,
+        headers: {
+          "Content-Type": cachedEntry.contentType,
+          "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
+          "X-Audio-Cache": "HIT",
+        },
       });
-      if (dbTtsModelSetting && dbTtsModelSetting.value && dbTtsModelSetting.value !== "auto") {
-        targetModel = dbTtsModelSetting.value;
-      }
-    } catch {
-      /* ignore DB lookup error */
     }
 
     // Format text input for SSML / prosody pacing if sending to premium models (MiniMax, OpenAI/Gemini)
@@ -152,11 +188,25 @@ export async function POST(
       );
     }
 
-    // Stream the audio blob back to the client directly
-    return new NextResponse(response.body, {
+    // Read full audio buffer into memory for caching & client response
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "audio/mpeg";
+
+    // Store in LRU cache with eviction if limit exceeded
+    if (ttsMemoryCache.size >= MAX_SERVER_AUDIO_CACHE) {
+      const oldestKey = ttsMemoryCache.keys().next().value;
+      if (oldestKey) ttsMemoryCache.delete(oldestKey);
+    }
+    ttsMemoryCache.set(cacheKey, { buffer, contentType });
+
+    // Stream the audio buffer back with HTTP caching headers
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        "Content-Type": response.headers.get("content-type") || "audio/mpeg",
+        "Content-Type": contentType,
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
+        "X-Audio-Cache": "MISS",
       },
     });
   } catch (error) {

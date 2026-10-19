@@ -9,6 +9,36 @@ import { LANGUAGE_CONFIG, type ProgrammingLanguage } from "@/types";
  * Accepts: { sourceCode, language, stdin? }
  * Returns: { result: { stdout, stderr, compileOutput, statusDescription, time, memory } }
  */
+interface ExecutionCacheResult {
+  stdout: string | null;
+  stderr: string | null;
+  compileOutput: string | null;
+  statusDescription: string;
+  statusId: number;
+  time: string | number | null;
+  memory: number | null;
+}
+
+const executionCache = new Map<string, { result: ExecutionCacheResult; expiry: number }>();
+const EXECUTION_CACHE_TTL = 120000; // 2 minutes
+const MAX_EXECUTION_CACHE = 80;
+
+function getExecutionCache(key: string): ExecutionCacheResult | null {
+  const entry = executionCache.get(key);
+  if (entry && entry.expiry > Date.now()) {
+    return entry.result;
+  }
+  return null;
+}
+
+function setExecutionCache(key: string, result: ExecutionCacheResult) {
+  if (executionCache.size >= MAX_EXECUTION_CACHE) {
+    const oldestKey = executionCache.keys().next().value;
+    if (oldestKey) executionCache.delete(oldestKey);
+  }
+  executionCache.set(key, { result, expiry: Date.now() + EXECUTION_CACHE_TTL });
+}
+
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
@@ -24,6 +54,13 @@ export async function POST(req: Request) {
         { error: "sourceCode and language are required" },
         { status: 400 }
       );
+    }
+
+    // Check execution cache (Sub-millisecond instant return for identical test runs)
+    const cacheKey = `${language}:${sourceCode}:${stdin || ""}`;
+    const cachedResult = getExecutionCache(cacheKey);
+    if (cachedResult) {
+      return NextResponse.json({ result: cachedResult, cached: true });
     }
 
     // ─── 1. Primary Engine: Piston API (Free Open-Source Standard Engine) ───────────
@@ -61,17 +98,18 @@ export async function POST(req: Request) {
             : "Runtime Error"
           : "Accepted";
 
-        return NextResponse.json({
-          result: {
-            stdout: run.stdout || (isError ? "" : run.output || ""),
-            stderr: run.stderr || (isError ? run.output : null),
-            compileOutput: null,
-            statusDescription,
-            statusId: run.code === 0 ? 3 : 11,
-            time: null,
-            memory: null,
-          },
-        });
+        const execResult: ExecutionCacheResult = {
+          stdout: run.stdout || (isError ? "" : run.output || ""),
+          stderr: run.stderr || (isError ? run.output : null),
+          compileOutput: null,
+          statusDescription,
+          statusId: run.code === 0 ? 3 : 11,
+          time: null,
+          memory: null,
+        };
+
+        setExecutionCache(cacheKey, execResult);
+        return NextResponse.json({ result: execResult });
       } else {
         console.warn("Piston API returned non-OK status. Trying secondary fallback...");
       }
@@ -117,17 +155,17 @@ export async function POST(req: Request) {
 
           const isError = !!result.error || outputStr.toLowerCase().includes("error");
 
-          return NextResponse.json({
-            result: {
-              stdout: isError ? "" : outputStr,
-              stderr: isError ? outputStr : result.error || null,
-              compileOutput: null,
-              statusDescription: isError ? "Runtime Error" : "Accepted",
-              statusId: result.statusCode,
-              time: timeVal,
-              memory: memoryVal,
-            },
-          });
+          const execResult: ExecutionCacheResult = {
+            stdout: isError ? "" : outputStr,
+            stderr: isError ? outputStr : result.error || null,
+            compileOutput: null,
+            statusDescription: isError ? "Runtime Error" : "Accepted",
+            statusId: result.statusCode,
+            time: timeVal,
+            memory: memoryVal,
+          };
+          setExecutionCache(cacheKey, execResult);
+          return NextResponse.json({ result: execResult });
         }
       } catch (err) {
         console.error("JDoodle Exception:", err);
@@ -181,17 +219,18 @@ export async function POST(req: Request) {
     const result = await submitResponse.json();
     const decode = (str: string | null) => (str ? Buffer.from(str, "base64").toString("utf-8") : null);
 
-    return NextResponse.json({
-      result: {
-        stdout: decode(result.stdout),
-        stderr: decode(result.stderr),
-        compileOutput: decode(result.compile_output),
-        statusDescription: result.status?.description || "Unknown",
-        statusId: result.status?.id || 0,
-        time: result.time,
-        memory: result.memory,
-      },
-    });
+    const execResult: ExecutionCacheResult = {
+      stdout: decode(result.stdout),
+      stderr: decode(result.stderr),
+      compileOutput: decode(result.compile_output),
+      statusDescription: result.status?.description || "Unknown",
+      statusId: result.status?.id || 0,
+      time: result.time,
+      memory: result.memory,
+    };
+    setExecutionCache(cacheKey, execResult);
+
+    return NextResponse.json({ result: execResult });
   } catch (error) {
     console.error("Execution error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

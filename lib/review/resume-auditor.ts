@@ -150,7 +150,7 @@ export async function auditResume(
       : `Only found ${metricsFound.length} metric(s). Recruiters prioritize results over task lists.`,
     fix: hasStrongMetrics
       ? undefined
-      : "Quantify your achievements: replace 'optimized query' with 'reduced API latency by 42% (from 320ms to 185ms)'.",
+      : "Resume tip: Add numbers to your project bullets (e.g. 'handled 500+ active users', 'improved load time by 35%', or 'processed 10k+ records').",
   });
   if (!hasStrongMetrics) {
     actionableFixes.push(

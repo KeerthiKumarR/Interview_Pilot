@@ -34,11 +34,19 @@ export default function DatabaseAdminPage() {
         query.append("eventType", eventTypeFilter);
       }
       const res = await fetch(`/api/admin/events?${query}`);
+      if (!res.ok) {
+        console.warn("Failed to fetch admin events:", res.status, res.statusText);
+        setEvents([]);
+        setTotalPages(1);
+        return;
+      }
       const data = await res.json();
-      setEvents(data.events);
-      setTotalPages(data.pagination.totalPages);
+      setEvents(Array.isArray(data?.events) ? data.events : []);
+      setTotalPages(data?.pagination?.totalPages || 1);
     } catch (error) {
       console.error("Failed to fetch events", error);
+      setEvents([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }

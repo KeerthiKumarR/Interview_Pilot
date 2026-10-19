@@ -15,45 +15,77 @@ export interface ChatMessage {
   content: string;
 }
 
-// ─── Shared config helper ────────────────────
+// ─── Shared config helper with 30s TTL in-memory cache ────────────────────
+let cachedProviderConfig: Awaited<ReturnType<typeof fetchProviderConfigFromDb>> | null = null;
+let lastProviderConfigFetch = 0;
+const PROVIDER_CONFIG_TTL_MS = 30000; // 30 seconds
 
-export async function getProviderConfig() {
+export function invalidateProviderConfigCache() {
+  cachedProviderConfig = null;
+  lastProviderConfigFetch = 0;
+}
+
+async function fetchProviderConfigFromDb() {
   // Default fallbacks from environment
-  let activeProvider = "gemini";
-  let activeModel = "gemini-2.5-flash";
-  let reportProvider = "gemini";
-  let reportModel = "gemini-2.5-flash";
+  let activeProvider = process.env.DEFAULT_AI_PROVIDER || (process.env.GROQ_API_KEY ? "groq" : process.env.OPENROUTER_API_KEY ? "openrouter" : "gemini");
+  let activeModel = process.env.DEFAULT_AI_MODEL || (activeProvider === "groq" ? "qwen/qwen3.8-27b" : process.env.OPENROUTER_MODEL || (activeProvider === "openrouter" ? "inclusionai/ling-3.0-flash-sante:free" : "gemini-2.5-flash"));
+  let reportProvider = process.env.REPORT_AI_PROVIDER || activeProvider;
+  let reportModel = process.env.REPORT_AI_MODEL || (reportProvider === "groq" ? "openai/gpt-oss-120b" : activeModel);
+  let groqKey = process.env.GROQ_API_KEY || "";
   let geminiKey = process.env.GEMINI_API_KEY || "";
   let zaiKey = process.env.ZAI_API_KEY || "511ba8c060534cd2b50e8e78170d4ed2.6hEKr2c10VeIHk3c";
   let openrouterKey = process.env.OPENROUTER_API_KEY || "";
   let deepseekKey = process.env.DEEPSEEK_API_KEY || "";
 
   try {
-    const providerSetting = await prisma.systemSetting.findUnique({ where: { key: "DEFAULT_AI_PROVIDER" } });
-    if (providerSetting) activeProvider = providerSetting.value;
+    const settings = await prisma.systemSetting.findMany({
+      where: {
+        key: {
+          in: [
+            "GROQ_API_KEY",
+            "DEFAULT_AI_PROVIDER",
+            "DEFAULT_AI_MODEL",
+            "REPORT_AI_PROVIDER",
+            "REPORT_AI_MODEL",
+            "GEMINI_API_KEY",
+            "ZAI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "DEEPSEEK_API_KEY",
+          ],
+        },
+      },
+    });
 
-    const modelSetting = await prisma.systemSetting.findUnique({ where: { key: "DEFAULT_AI_MODEL" } });
-    if (modelSetting) activeModel = modelSetting.value;
-    
-    const reportProviderSetting = await prisma.systemSetting.findUnique({ where: { key: "REPORT_AI_PROVIDER" } });
-    if (reportProviderSetting) reportProvider = reportProviderSetting.value;
+    const settingsMap = new Map(settings.map((s) => [s.key, s.value]));
+
+    const gKey = settingsMap.get("GROQ_API_KEY");
+    if (gKey) groqKey = gKey;
+
+    const pSetting = settingsMap.get("DEFAULT_AI_PROVIDER");
+    if (pSetting) activeProvider = pSetting;
+
+    const mSetting = settingsMap.get("DEFAULT_AI_MODEL");
+    if (mSetting) activeModel = mSetting;
+
+    const rpSetting = settingsMap.get("REPORT_AI_PROVIDER");
+    if (rpSetting) reportProvider = rpSetting;
     else reportProvider = activeProvider;
 
-    const reportModelSetting = await prisma.systemSetting.findUnique({ where: { key: "REPORT_AI_MODEL" } });
-    if (reportModelSetting) reportModel = reportModelSetting.value;
+    const rmSetting = settingsMap.get("REPORT_AI_MODEL");
+    if (rmSetting) reportModel = rmSetting;
     else reportModel = activeModel;
 
-    const geminiKeySetting = await prisma.systemSetting.findUnique({ where: { key: "GEMINI_API_KEY" } });
-    if (geminiKeySetting && geminiKeySetting.value) geminiKey = geminiKeySetting.value;
+    const gemKey = settingsMap.get("GEMINI_API_KEY");
+    if (gemKey) geminiKey = gemKey;
 
-    const zaiKeySetting = await prisma.systemSetting.findUnique({ where: { key: "ZAI_API_KEY" } });
-    if (zaiKeySetting && zaiKeySetting.value) zaiKey = zaiKeySetting.value;
+    const zKey = settingsMap.get("ZAI_API_KEY");
+    if (zKey) zaiKey = zKey;
 
-    const openrouterKeySetting = await prisma.systemSetting.findUnique({ where: { key: "OPENROUTER_API_KEY" } });
-    if (openrouterKeySetting && openrouterKeySetting.value) openrouterKey = openrouterKeySetting.value;
+    const orKey = settingsMap.get("OPENROUTER_API_KEY");
+    if (orKey) openrouterKey = orKey;
 
-    const deepseekKeySetting = await prisma.systemSetting.findUnique({ where: { key: "DEEPSEEK_API_KEY" } });
-    if (deepseekKeySetting && deepseekKeySetting.value) deepseekKey = deepseekKeySetting.value;
+    const dsKey = settingsMap.get("DEEPSEEK_API_KEY");
+    if (dsKey) deepseekKey = dsKey;
   } catch (e) {
     console.warn("Failed to fetch SystemSetting from Prisma, using defaults", e);
   }
@@ -63,6 +95,11 @@ export async function getProviderConfig() {
     activeModel,
     reportProvider,
     reportModel,
+    groq: {
+      key: groqKey,
+      url: process.env.GROQ_API_URL || "https://api.groq.com/openai/v1",
+      model: process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
+    },
     gemini: {
       key: geminiKey,
       url: "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -85,6 +122,16 @@ export async function getProviderConfig() {
       model: process.env.OLLAMA_MODEL || "llama3",
     },
   };
+}
+
+export async function getProviderConfig() {
+  const now = Date.now();
+  if (cachedProviderConfig && now - lastProviderConfigFetch < PROVIDER_CONFIG_TTL_MS) {
+    return cachedProviderConfig;
+  }
+  cachedProviderConfig = await fetchProviderConfigFromDb();
+  lastProviderConfigFetch = now;
+  return cachedProviderConfig;
 }
 
 /**
@@ -157,7 +204,10 @@ export async function deepseekChat(
   const model = options?.useReportModel ? config.reportModel : config.activeModel;
   let isOpenRouter = false;
 
-  if (activeProviderToUse === "openrouter") {
+  if (activeProviderToUse === "groq") {
+    url = config.groq.url;
+    key = config.groq.key;
+  } else if (activeProviderToUse === "openrouter") {
     url = config.openrouter.url;
     key = config.openrouter.key;
     isOpenRouter = true;
@@ -183,7 +233,14 @@ export async function deepseekChat(
   try {
     return await makeRequest(url, key, model, isOpenRouter, messages, options, 90000);
   } catch (err) {
-    console.error(`${activeProviderToUse} failed. Attempting Z.AI fallback...`, err);
+    console.error(`${activeProviderToUse} (${model}) failed. Attempting fallbacks...`, err);
+    if (activeProviderToUse === "openrouter" && model !== "nvidia/nemotron-3.5-lightning:free") {
+      try {
+        return await makeRequest(config.openrouter.url, config.openrouter.key, "nvidia/nemotron-3.5-lightning:free", true, messages, options, 90000);
+      } catch (orErr) {
+        console.error("OpenRouter free model fallback failed:", orErr);
+      }
+    }
     if (activeProviderToUse !== "zai" && config.zai.key) {
       try {
         return await makeRequest(config.zai.url, config.zai.key, "glm-4.7-flash", false, messages, options, 90000);
@@ -239,7 +296,10 @@ export async function deepseekChatStream(
   // Add primary configured provider
   let primaryUrl = config.gemini.url;
   let primaryKey = config.gemini.key;
-  if (config.activeProvider === "openrouter") {
+  if (config.activeProvider === "groq") {
+    primaryUrl = config.groq.url;
+    primaryKey = config.groq.key;
+  } else if (config.activeProvider === "openrouter") {
     primaryUrl = config.openrouter.url;
     primaryKey = config.openrouter.key;
   } else if (config.activeProvider === "deepseek") {
@@ -266,8 +326,24 @@ export async function deepseekChatStream(
     });
   }
 
+  // Add Groq backup if not already primary
+  if (config.groq.key && config.activeProvider !== "groq") {
+    failoverChain.push(
+      { model: "qwen/qwen3.8-27b", provider: "groq", url: config.groq.url, key: config.groq.key },
+      { model: "openai/gpt-oss-120b", provider: "groq", url: config.groq.url, key: config.groq.key }
+    );
+  }
+
   // Add OpenRouter backups if available
   if (config.openrouter.key) {
+    if (formattedModel !== "nvidia/nemotron-3.5-lightning:free") {
+      failoverChain.push({
+        model: "nvidia/nemotron-3.5-lightning:free",
+        provider: "openrouter",
+        url: config.openrouter.url,
+        key: config.openrouter.key,
+      });
+    }
     failoverChain.push(
       { model: "deepseek/deepseek-chat", provider: "openrouter", url: config.openrouter.url, key: config.openrouter.key },
       { model: "google/gemini-2.5-flash", provider: "openrouter", url: config.openrouter.url, key: config.openrouter.key },
@@ -578,6 +654,7 @@ export function buildInterviewerSystemPrompt(config: {
   outOfFrameCount?: number;
   multiplePeopleCount?: number;
   hintCount?: number;
+  isViva?: boolean;
 }): string {
   // Build time-awareness context
   let timeContext = "";
@@ -648,13 +725,79 @@ const INDIAN_VOICE_NAME_MAP: Record<string, string> = {
   gemini_onyx: "Varun",
   gemini_nova: "Tara",
   gemini_shimmer: "Neha",
-  local_male: "System Male",
-  local_female: "System Female",
+  local_male: "Aarav",
+  local_female: "Ananya",
 };
 
   const isFemale = config.voiceId && (config.voiceId.startsWith("af_") || config.voiceId.startsWith("if_") || config.voiceId.startsWith("bf_") || config.voiceId.includes("female") || config.voiceId === "gemini_nova" || config.voiceId === "gemini_shimmer");
   const mappedName = config.voiceId ? INDIAN_VOICE_NAME_MAP[config.voiceId] : undefined;
   const interviewerName = mappedName || (isFemale ? "Ananya" : "Aarav");
+
+  const isPlacementViva =
+    config.isViva ||
+    config.problemTitle?.toLowerCase().includes("viva") ||
+    config.problemTitle?.toLowerCase().includes("placement") ||
+    config.problemTitle?.toLowerCase().includes("project") ||
+    config.style === "viva";
+
+  if (isPlacementViva) {
+    return `You are ${interviewerName}, a Senior Technical Interviewer & Staff Systems Architect conducting a live, verbal Placement Viva and Project Defense.
+
+MISSION & IDENTITY:
+- You are conducting a high-stakes, verbal Placement Viva and Project Architecture Defense.
+- You are NOT testing a LeetCode algorithmic puzzle. You are evaluating the candidate's actual engineering depth, system design decisions, and hands-on competence based on their resume, verified tech stack, and portfolio projects.
+- This is a natural, live spoken conversation (Voice-to-Voice). Speak warmly, articulately, and directly as a senior engineering lead on a video call.
+
+VIVA INTERVIEW CONTEXT:
+- Session Title: "${config.problemTitle}"
+- Difficulty Level: ${config.difficulty}
+- Core Tech Ecosystem: ${config.language}
+- Target Duration: ${config.duration} minutes
+${timeContext}
+${proctoringContext}
+
+STRUCTURED 4-STAGE VIVA OBJECTIVES:
+You are actively guiding the candidate across these 4 evaluation stages:
+1. Stage 1 (Introduction & Technical Alignment):
+   - Welcome the candidate and explore their technical journey, motivations, and the core technologies they specialize in.
+   - Evaluate communication clarity, intellectual curiosity, and engineering ownership.
+2. Stage 2 (Featured Project Architecture Defense):
+   - Deep-dive into their featured projects (from their resume and dossier in context).
+   - Drill into end-to-end data flow: client-to-server lifecycle, state hydration, API contract design (REST, GraphQL, or RPC).
+   - Inquire why specific technologies were selected over alternatives (e.g. why MongoDB vs PostgreSQL, Express vs Fastify, Next.js App Router vs Pages, Redis for caching).
+   - Challenge their database schema, indexing strategies, document relationships, and normalization trade-offs.
+3. Stage 3 (System Scalability, Caching & Failure Modes):
+   - Probe real-world scale: Caching strategies (Redis cache-aside, TTLs, cache invalidation, cache stampede prevention).
+   - Concurrency & reliability: Rate limiting, connection pooling, background workers, and handling traffic spikes.
+   - The toughest production bug, performance bottleneck, or outage they encountered and how they diagnosed and fixed it.
+4. Stage 4 (Hands-On Implementation & Scratchpad Defense):
+   - Guide the candidate to write or optimize a core component in their scratchpad (e.g., an Express auth/rate-limit middleware, a Redis caching wrapper, a database query optimization, or an async utility).
+   - Inspect and acknowledge the candidate's live code in the editor, providing real-time architectural feedback.
+
+WHEN TO PROMPT FOR CODE IN THE IDE:
+- In Turn 1 (Intro): Keep it conversational; welcome them and ask about their core stack.
+- In Turn 2 (Architecture Defense): Discuss their project flow, data model, or APIs verbally.
+- In Turn 3 or 4 (Hands-On Coding Transition): PROACTIVELY direct the candidate to the IDE on their right!
+  Say something like: "Now, let's take a look at the code editor on your right. Could you draft the API handler or middleware for that request so we can see how you structure the logic and handle errors?"
+- ANY time the candidate writes or executes code in the scratchpad, reference their exact line numbers and terminal output directly in your response!
+
+AUTOMATIC STAGE PROGRESSION DIRECTIVE:
+You control the progression of the candidate's interview session across the 4 stages. Whenever you naturally transition into a new stage in your response, append the corresponding silent tag at the very end of your response:
+- When transitioning into Project Architecture Defense (their featured project in scope): append [STAGE: 2]
+- When transitioning into System Scalability & Scratchpad Coding: append [STAGE: 3]
+- When transitioning into Behavioral Wrap-Up & Scoring: append [STAGE: 4]
+(This tag is invisible to the candidate and automatically advances the UI stepper and checklist in real time).
+
+CRITICAL VOICE & CONVERSATION RULES:
+1. SPOKEN BREVITY: Every reply MUST be strictly 2 to 3 sentences (maximum 50-70 words). The candidate is listening to your voice over audio — NEVER dump paragraphs, bullet points, numbered lists, or markdown formatting!
+2. ONE TOPIC AT A TIME: Ask exactly ONE clear, sharp technical question at a time. Let the candidate answer before following up.
+3. ADAPT TO CANDIDATE RESPONSES: Actively build upon what the candidate just said. If they mention Redis, probe their cache invalidation. If they mention MongoDB, probe their schema and indexing.
+4. ACKNOWLEDGE CODE & RUNS: When the candidate writes or executes code in the scratchpad, reference their actual code lines and terminal output directly in the conversation.
+5. NO MARKDOWN OR CODE BLOCKS IN SPEECH: Speak in clear, natural human sentences. Use natural punctuation (commas, ellipses) so that text-to-speech speaks with natural pauses.
+6. RIGOROUS YET ENCOURAGING: Validate solid points ("Good, that makes sense with Redis TTLs..."), but push them on trade-offs ("Now, what happens if your cache expires during a write storm?").
+
+TONE: Senior engineering leader — sharp, conversational, encouraging, and deeply technical.`;
+  }
 
   let styleInstructions = "";
   if (config.style === "product") {
@@ -705,7 +848,7 @@ When the candidate completes or approaches a working solution, guide them throug
 
 BEHAVIOR RULES:
 1. Start by briefly introducing yourself and the problem. Do NOT repeat the full problem text — the candidate can see it.
-2. Ask the candidate to explain their approach before coding.
+2. Ask the candidate to explain their high-level approach before coding. As soon as they explain it, explicitly tell them: "That approach makes complete sense. Please go ahead and start writing your implementation in the code editor on your right."
 3. If the candidate is stuck, give small hints — never give the solution.
 4. Ask follow-up questions about:
    - Time/space complexity

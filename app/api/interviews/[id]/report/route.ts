@@ -372,30 +372,36 @@ Generate the evaluation report as raw JSON adhering strictly to the system promp
 
     const finalEstimatedLevel = reportData.estimatedLevel && reportData.estimatedLevel !== "Unknown" ? reportData.estimatedLevel : "Very Basic";
 
-    // Save report to database
-    const report = await prisma.report.create({
-      data: {
+    // Save report to database (upsert prevents unique constraint race conditions)
+    const reportPayload = {
+      overallScore: reportData.overallScore,
+      technicalScore: reportData.technicalScore,
+      communicationScore: reportData.communicationScore,
+      problemSolvingScore: reportData.problemSolvingScore,
+      optimizationScore: reportData.optimizationScore,
+      codeQualityScore: reportData.codeQualityScore,
+      recruiterVerdict: isDynamicMode ? reportData.recruiterVerdict : null,
+      recruiterNotes: isDynamicMode && reportData.recruiterNotes ? reportData.recruiterNotes : undefined,
+      skillScores: isDynamicMode && reportData.skillScores ? reportData.skillScores : undefined,
+      candidateRoadmap: isDynamicMode && reportData.candidateRoadmap ? reportData.candidateRoadmap : undefined,
+      strengths: reportData.strengths,
+      weaknesses: reportData.weaknesses,
+      suggestions: reportData.suggestions,
+      summary: reportData.summary,
+      nextSteps: reportData.nextSteps || [],
+      transcriptAnnotations: reportData.transcriptAnnotations || [],
+      timeComplexity: reportData.timeComplexity || "Unknown",
+      spaceComplexity: reportData.spaceComplexity || "Unknown",
+      isSolved: !!reportData.isSolved,
+      estimatedLevel: finalEstimatedLevel,
+    };
+
+    const report = await prisma.report.upsert({
+      where: { interviewId: id },
+      update: reportPayload,
+      create: {
         interviewId: id,
-        overallScore: reportData.overallScore,
-        technicalScore: reportData.technicalScore,
-        communicationScore: reportData.communicationScore,
-        problemSolvingScore: reportData.problemSolvingScore,
-        optimizationScore: reportData.optimizationScore,
-        codeQualityScore: reportData.codeQualityScore,
-        recruiterVerdict: isDynamicMode ? reportData.recruiterVerdict : null,
-        recruiterNotes: isDynamicMode && reportData.recruiterNotes ? reportData.recruiterNotes : undefined,
-        skillScores: isDynamicMode && reportData.skillScores ? reportData.skillScores : undefined,
-        candidateRoadmap: isDynamicMode && reportData.candidateRoadmap ? reportData.candidateRoadmap : undefined,
-        strengths: reportData.strengths,
-        weaknesses: reportData.weaknesses,
-        suggestions: reportData.suggestions,
-        summary: reportData.summary,
-        nextSteps: reportData.nextSteps || [],
-        transcriptAnnotations: reportData.transcriptAnnotations || [],
-        timeComplexity: reportData.timeComplexity || "Unknown",
-        spaceComplexity: reportData.spaceComplexity || "Unknown",
-        isSolved: !!reportData.isSolved,
-        estimatedLevel: finalEstimatedLevel,
+        ...reportPayload,
       },
     });
 

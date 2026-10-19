@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   deepseekChatStream,
   buildInterviewerSystemPrompt,
@@ -18,6 +19,16 @@ interface RouteContext {
 export const dynamic = "force-dynamic";
 // No timeout limit on Render — standard Node.js runtime is fine
 export const maxDuration = 300; // 5 minutes max (for safety)
+
+type CachedStudentProfile = Prisma.StudentProfileGetPayload<{
+  include: {
+    projects: { orderBy: { order: "asc" } };
+    achievements: true;
+  };
+}> | null;
+
+// In-memory 60s TTL cache for candidate profile context to eliminate redundant DB joins during active interview viva
+const profileSessionCache = new Map<string, { profile: CachedStudentProfile; expiry: number }>();
 
 /**
  * POST /api/interviews/[id]/chat
@@ -43,9 +54,6 @@ export async function POST(req: Request, context: RouteContext) {
       executionResult,
       timeRemainingSeconds,
       voiceId,
-      tabSwitchCount: bodyTabSwitch,
-      outOfFrameCount: bodyOutOfFrame,
-      multiplePeopleCount: bodyMultiplePeople,
     } = body;
 
     if (!message || typeof message !== "string") {
@@ -103,9 +111,9 @@ export async function POST(req: Request, context: RouteContext) {
     });
 
     // Authoritative backend data loading directly from database (not from frontend chat payload)
-    const dbTabSwitch = (interview as any).tabSwitchCount ?? 0;
-    const dbOutOfFrame = (interview as any).outOfFrameCount ?? 0;
-    const dbMultiplePeople = (interview as any).multiplePeopleCount ?? 0;
+    const dbTabSwitch = interview.tabSwitchCount ?? 0;
+    const dbOutOfFrame = interview.outOfFrameCount ?? 0;
+    const dbMultiplePeople = interview.multiplePeopleCount ?? 0;
 
     const dbHintCount = await prisma.eventLog.count({
       where: {
@@ -142,13 +150,20 @@ export async function POST(req: Request, context: RouteContext) {
       dynamicInterviewerPrompt = `\n\n${skillPromptText}\n\nEVALUATION TARGET SKILLS FOR THIS SESSION:\n${targetSkills}\n\n${buildDynamicToolInstructions()}`;
     }
 
+    const isViva =
+      !interview.jobRoleId ||
+      interview.problemTitle?.toLowerCase().includes("viva") ||
+      interview.problemTitle?.toLowerCase().includes("placement") ||
+      interview.problemTitle?.toLowerCase().includes("project") ||
+      interview.jobRole?.mode !== "hybrid";
+
     // Build system prompt using authoritative backend DB data
     const baseSystemPrompt = buildInterviewerSystemPrompt({
       problemTitle: interview.problemTitle,
       problemDescription: interview.problemDescription,
       language: interview.language,
       difficulty: interview.difficulty,
-      style: (interview as any).style,
+      style: interview.style,
       duration: interview.duration,
       timeRemainingSeconds:
         typeof timeRemainingSeconds === "number"
@@ -159,16 +174,26 @@ export async function POST(req: Request, context: RouteContext) {
       outOfFrameCount: dbOutOfFrame,
       multiplePeopleCount: dbMultiplePeople,
       hintCount: dbHintCount,
+      isViva,
     });
 
-    // Load candidate's career profile & projects to enable personalized interview questions
-    const studentProfile = await prisma.studentProfile.findUnique({
-      where: { userId: user.id },
-      include: {
-        projects: { orderBy: { order: "asc" } },
-        achievements: true,
-      },
-    });
+    // Load candidate's career profile & projects to enable personalized interview questions (cached 60s)
+    const now = Date.now();
+    let studentProfile: CachedStudentProfile = null;
+
+    const cachedProfileEntry = profileSessionCache.get(user.id);
+    if (cachedProfileEntry && cachedProfileEntry.expiry > now) {
+      studentProfile = cachedProfileEntry.profile;
+    } else {
+      studentProfile = await prisma.studentProfile.findUnique({
+        where: { userId: user.id },
+        include: {
+          projects: { orderBy: { order: "asc" } },
+          achievements: true,
+        },
+      });
+      profileSessionCache.set(user.id, { profile: studentProfile, expiry: now + 60000 });
+    }
 
     const profileDirective = buildProfileInterviewDirective(studentProfile ? {
       targetRole: studentProfile.targetRole,
@@ -209,13 +234,25 @@ export async function POST(req: Request, context: RouteContext) {
       fullUserMessage += `\n\n${execSummary}`;
     }
 
-    // Build conversation history ensuring valid role sequence
+    // Build conversation history ensuring valid role sequence and filtering empty/invalid entries
+    const historicalMessages: ChatMessage[] = (interview.messages || [])
+      .filter((m) => m && typeof m.content === "string" && m.content.trim().length > 0)
+      .map((m) => ({
+        role: (m.role === "assistant" || m.role === "system" ? m.role : "user") as ChatMessage["role"],
+        content: m.content.trim(),
+      }));
+
+    // Avoid duplicate trailing user messages if an unreplied turn was stored earlier
+    while (
+      historicalMessages.length > 0 &&
+      historicalMessages[historicalMessages.length - 1]?.role === "user"
+    ) {
+      historicalMessages.pop();
+    }
+
     const conversationHistory: ChatMessage[] = [
       { role: "system", content: systemPrompt },
-      ...interview.messages.map((m) => ({
-        role: m.role as "assistant" | "user",
-        content: m.content,
-      })),
+      ...historicalMessages,
       { role: "user" as const, content: fullUserMessage },
     ];
 
@@ -226,10 +263,12 @@ export async function POST(req: Request, context: RouteContext) {
         maxTokens: 2560,
         onComplete: async (result) => {
           try {
-            // Clean tool call markup for persistent chat transcript
-            const cleanContent = isDynamicMode
-              ? result.content.replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "").trim()
-              : result.content;
+            // Clean tool call markup and internal stage tags for persistent chat transcript
+            const cleanContent = result.content
+              .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
+              .replace(/\[STAGE:\s*[1-4]\]/gi, "")
+              .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
+              .trim();
 
             await prisma.message.create({
               data: {
@@ -245,15 +284,17 @@ export async function POST(req: Request, context: RouteContext) {
             // Execute & persist dynamic tool calls to EventLog
             if (isDynamicMode) {
               const toolCallRegex = /\[TOOL_CALL:\s*([a-zA-Z0-9_]+)\((.*?)\)\]/gi;
-              let match;
+              let match: RegExpExecArray | null;
               while ((match = toolCallRegex.exec(result.content)) !== null) {
-                const toolName = match[1];
-                const argsStr = match[2];
+                const toolName = match[1] || "";
+                const argsStr = match[2] || "";
                 const argRegex = /(\w+)\s*=\s*["']([^"']*)["']/g;
                 const args: Record<string, string> = {};
-                let argMatch;
+                let argMatch: RegExpExecArray | null;
                 while ((argMatch = argRegex.exec(argsStr)) !== null) {
-                  args[argMatch[1]] = argMatch[2];
+                  if (argMatch[1] && typeof argMatch[2] === "string") {
+                    args[argMatch[1]] = argMatch[2];
+                  }
                 }
 
                 if (toolName === "switch_category") {

@@ -139,7 +139,7 @@ export function SocialLinksForm({
           <label className="text-sm font-medium flex items-center justify-between">
             <span className="flex items-center gap-2">
               <Code2 className="size-4 text-amber-500" />
-              LeetCode Username
+              LeetCode Handle & Coding Stats
             </span>
             {leetcodeUsername && (
               <a
@@ -148,7 +148,7 @@ export function SocialLinksForm({
                 rel="noreferrer"
                 className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
               >
-                View
+                View Profile
                 <ExternalLink className="size-3" />
               </a>
             )}
@@ -167,6 +167,49 @@ export function SocialLinksForm({
           {errors.leetcodeUsername && (
             <p className="text-xs text-destructive">{errors.leetcodeUsername}</p>
           )}
+
+          {/* Optional LeetCode Breakdown per Module 1 specification */}
+          <div className="rounded-md border border-border/60 bg-muted/20 p-2.5 space-y-2 mt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Coding Practice Breakdown (Feeds 10% Placement Readiness Weight)
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-0.5">Total</label>
+                <Input
+                  className="h-7 text-xs px-2"
+                  placeholder="e.g. 250"
+                  defaultValue="200+"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-emerald-500 font-medium block mb-0.5">Easy</label>
+                <Input
+                  className="h-7 text-xs px-2 text-emerald-600 dark:text-emerald-400"
+                  placeholder="60"
+                  defaultValue="70"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-amber-500 font-medium block mb-0.5">Medium</label>
+                <Input
+                  className="h-7 text-xs px-2 text-amber-600 dark:text-amber-400"
+                  placeholder="150"
+                  defaultValue="110"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-destructive font-medium block mb-0.5">Hard / Rating</label>
+                <Input
+                  className="h-7 text-xs px-2 text-destructive"
+                  placeholder="20 (1750)"
+                  defaultValue="20 (1680)"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

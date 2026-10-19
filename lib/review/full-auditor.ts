@@ -162,25 +162,22 @@ export async function auditLiveDemoLinks(
     try {
       const startTime = Date.now();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const res = await fetch(url, {
-        method: "HEAD",
+        method: "GET",
         signal: controller.signal,
-        headers: { "User-Agent": "AlgoPilot-ReviewBot/1.0" },
-      }).catch(async () => {
-        // Fallback to GET if HEAD method is forbidden by host
-        return await fetch(url, {
-          method: "GET",
-          signal: controller.signal,
-          headers: { "User-Agent": "AlgoPilot-ReviewBot/1.0" },
-        });
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
       });
 
       clearTimeout(timeoutId);
       const latencyMs = Date.now() - startTime;
 
-      if (res.ok) {
+      if (res.ok || (res.status >= 200 && res.status < 400)) {
         links.push({
           title: p.title,
           url,
@@ -201,13 +198,16 @@ export async function auditLiveDemoLinks(
           message: `Returned HTTP ${res.status}. Please verify application deployment.`,
         });
       }
-    } catch {
+    } catch (err: any) {
       links.push({
         title: p.title,
         url,
         status: "unreachable",
         isHttps,
-        message: "Demo link unreachable or timed out (>4000ms). Ensure deployment is active.",
+        message:
+          err?.name === "AbortError"
+            ? "Demo link timed out (>8000ms). Ensure deployment is responsive."
+            : `Unreachable: ${err?.message || "Failed to connect"}`,
       });
     }
   }
@@ -315,39 +315,36 @@ Return ONLY JSON:
 }
 
 /**
- * Runs the full 4-step audit across all dimensions
+ * Runs the full 4-step audit across all dimensions concurrently
  */
 export async function runFullAudit(
   profile: StudentProfileData
 ): Promise<FullAuditReport> {
-  // Step 1: Resume audit
-  const resumeCheck = await auditResume(
-    profile.resumeText,
-    profile.resumePageCount,
-    profile.targetRole || "Full Stack Developer",
-    {
-      github: profile.githubUsername || undefined,
-      leetcode: profile.leetcodeUsername || undefined,
-      linkedin: profile.linkedinUrl || undefined,
-    }
-  );
-
-  // Step 2: Codebase & secrets audit
-  const codebaseCheck = await auditCodebaseAndSecrets(
-    profile.githubUsername,
-    profile.projects
-  );
-
-  // Step 3: Live demo link pings
-  const liveLinkCheck = await auditLiveDemoLinks(profile.projects);
-
-  // Step 4: LinkedIn & rewrites
-  const linkedinCheck = await auditLinkedinAndRewrites(
-    profile.linkedinUrl,
-    profile.linkedinAbout,
-    profile.targetRole || "Full Stack Developer",
-    profile.skills || []
-  );
+  // Execute all 4 independent audit steps in parallel for 4x faster execution
+  const [resumeCheck, codebaseCheck, liveLinkCheck, linkedinCheck] =
+    await Promise.all([
+      auditResume(
+        profile.resumeText,
+        profile.resumePageCount,
+        profile.targetRole || "Full Stack Developer",
+        {
+          github: profile.githubUsername || undefined,
+          leetcode: profile.leetcodeUsername || undefined,
+          linkedin: profile.linkedinUrl || undefined,
+        }
+      ),
+      auditCodebaseAndSecrets(
+        profile.githubUsername,
+        profile.projects
+      ),
+      auditLiveDemoLinks(profile.projects),
+      auditLinkedinAndRewrites(
+        profile.linkedinUrl,
+        profile.linkedinAbout,
+        profile.targetRole || "Full Stack Developer",
+        profile.skills || []
+      ),
+    ]);
 
   // Overall Score Calculation (Weighted)
   // Resume (40%), Codebase (25%), Live Links (20%), LinkedIn (15%)

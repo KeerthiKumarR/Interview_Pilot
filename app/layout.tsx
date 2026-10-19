@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavigationLoadingProvider } from "@/components/navigation-loading-provider";
+import { ExtensionErrorSuppressor } from "@/components/extension-error-suppressor";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,16 +19,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AlgoPilot — AI Coding Interview Platform",
+  title: "Mirai Copilot — AI Placement & Viva Platform",
   description:
-    "Practice coding interviews with an AI interviewer. Solve problems, get real-time feedback, and receive detailed performance reports.",
+    "Mirai Copilot: Autonomous AI Interview Agent for engineering placement vivas, live code execution, real-time voice speech analysis, and multi-tier readiness scoring.",
   keywords: [
-    "coding interview",
-    "AI interviewer",
-    "technical interview",
-    "practice coding",
-    "mock interview",
+    "Mirai Copilot",
+    "AI Interviewer",
+    "Placement Readiness",
+    "Technical Viva",
+    "Coding Interview Copilot",
+    "MSOT Benchmark",
   ],
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -42,6 +51,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background text-foreground antialiased">
+        <ExtensionErrorSuppressor />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

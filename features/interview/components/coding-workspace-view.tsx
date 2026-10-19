@@ -1,9 +1,13 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useUser } from "@clerk/nextjs";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { CodeEditor } from "@/features/editor/components/code-editor";
+import { WhiteboardCanvas } from "@/features/interview/components/whiteboard-canvas";
 import { CODING_PROBLEMS } from "@/data/problems";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Play,
   CheckCircle2,
@@ -15,6 +19,9 @@ import {
   Terminal,
   Send,
   HelpCircle,
+  Globe,
+  ExternalLink,
+  PenTool,
 } from "lucide-react";
 
 interface ExecutionResult {
@@ -35,13 +42,14 @@ export function CodingWorkspaceView({
   onRunCode,
   onSubmitCode,
 }: CodingWorkspaceViewProps) {
+  const { user } = useUser();
   const problemTitle = useInterviewStore((s) => s.problemTitle);
   const problemDescription = useInterviewStore((s) => s.problemDescription);
   const language = useInterviewStore((s) => s.language);
   const difficulty = useInterviewStore((s) => s.difficulty);
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
 
-  const [activeProblemTab, setActiveProblemTab] = useState<"problem" | "examples" | "constraints" | "hints">("problem");
+  const [activeProblemTab, setActiveProblemTab] = useState<"problem" | "whiteboard" | "examples" | "constraints" | "hints">("problem");
   const [activeTestTab, setActiveTestTab] = useState<"cases" | "output">("cases");
   const [selectedCaseIndex, setSelectedCaseIndex] = useState(0);
 
@@ -49,35 +57,108 @@ export function CodingWorkspaceView({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
 
-  // Match the problem from curated CODING_PROBLEMS dataset or fallback
+  const isViva = useMemo(() => {
+    return !problemTitle || (
+      problemTitle.toLowerCase().includes("viva") ||
+      problemTitle.toLowerCase().includes("placement") ||
+      problemTitle.toLowerCase().includes("project")
+    );
+  }, [problemTitle]);
+
+  const vivaMetadata = useMemo(() => {
+    if (!isViva) return null;
+
+    let roleName = "Software Engineer";
+    let projectTitle: string | null = null;
+    let liveUrl: string | null = null;
+    let repoUrl: string | null = null;
+    let techStack: string | null = null;
+
+    if (problemTitle) {
+      if (problemTitle.includes(":")) {
+        const parts = problemTitle.split(":");
+        roleName = parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
+        projectTitle = parts[1].trim();
+      } else {
+        roleName = problemTitle.replace(/Placement Viva/i, "").trim() || "Software Engineer";
+      }
+    }
+
+    if (problemDescription) {
+      const liveMatch = problemDescription.match(/\-\s*\*\*Live Deployment\*\*:\s*([^\n\r]+)/i);
+      if (liveMatch && liveMatch[1]?.trim().startsWith("http")) {
+        liveUrl = liveMatch[1].trim();
+      }
+      const repoMatch = problemDescription.match(/\-\s*\*\*Source Code Repository\*\*:\s*([^\n\r]+)/i);
+      if (repoMatch && repoMatch[1]?.trim().startsWith("http")) {
+        repoUrl = repoMatch[1].trim();
+      }
+      const stackMatch = problemDescription.match(/\-\s*\*\*Verified Tech Stack\*\*:\s*([^\n\r]+)/i);
+      if (stackMatch && stackMatch[1]?.trim()) {
+        techStack = stackMatch[1].trim();
+      }
+    }
+
+    return {
+      roleName,
+      projectTitle,
+      liveUrl,
+      repoUrl,
+      techStack,
+    };
+  }, [isViva, problemTitle, problemDescription]);
+
+  // Match the problem from curated CODING_PROBLEMS dataset or fallback (only for standalone DSA challenges)
   const matchedProblem = useMemo(() => {
-    if (!problemTitle) return null;
+    if (!problemTitle || isViva) return null;
     const normalized = problemTitle.toLowerCase().trim();
     return (
       CODING_PROBLEMS.find((p) => p.title.toLowerCase().trim() === normalized) ||
       CODING_PROBLEMS.find((p) => normalized.includes(p.title.toLowerCase().trim())) ||
       null
     );
-  }, [problemTitle]);
+  }, [problemTitle, isViva]);
 
-  const displayTitle =
-    currentQuestion?.title?.replace(/^\d+[\.\:\-]\s*/, "").trim() ||
-    matchedProblem?.title ||
-    problemTitle ||
-    "Coding Challenge";
+  const displayTitle = useMemo(() => {
+    if (isViva && problemTitle) return problemTitle;
+    return (
+      currentQuestion?.title?.replace(/^\d+[\.\:\-]\s*/, "").trim() ||
+      matchedProblem?.title ||
+      problemTitle ||
+      "Technical Viva & Coding"
+    );
+  }, [isViva, problemTitle, currentQuestion, matchedProblem]);
 
   const displayDifficulty =
-    difficulty || matchedProblem?.difficulty || "Medium";
+    difficulty || matchedProblem?.difficulty || (isViva ? "Placement Track" : "Medium");
 
   const displayTags = useMemo(() => {
+    if (isViva) {
+      return ["Full Stack", "Project Defense", "System Architecture", "Live Demo"];
+    }
     if (matchedProblem?.tags && matchedProblem.tags.length > 0) {
       return matchedProblem.tags;
     }
     return ["Algorithms", "Data Structure", "Problem Solving"];
-  }, [matchedProblem]);
+  }, [isViva, matchedProblem]);
 
   // Resolve Examples
   const displayExamples = useMemo(() => {
+    if (isViva) {
+      const proj = vivaMetadata?.projectTitle || "Application";
+      return [
+        {
+          input: `GET /api/health → 200 OK`,
+          output: `{"status": "healthy", "service": "${proj}"}`,
+          explanation: "Health check and microservice discovery probe.",
+        },
+        {
+          input: `POST /api/action → payload: { "action": "test", "project": "${proj}" }`,
+          output: `{"success": true, "durationMs": 42}`,
+          explanation: "Asynchronous task queue handler or database mutation.",
+        },
+      ];
+    }
     if (matchedProblem?.examples && matchedProblem.examples.length > 0) {
       return matchedProblem.examples;
     }
@@ -92,10 +173,17 @@ export function CodingWorkspaceView({
         output: "[1, 2]",
       },
     ];
-  }, [matchedProblem]);
+  }, [isViva, vivaMetadata, matchedProblem]);
 
   // Resolve Constraints
   const displayConstraints = useMemo(() => {
+    if (isViva) {
+      return [
+        "Network Latency: Sub-100ms response targets for primary endpoints.",
+        "Security & Auth: Strict CORS hygiene, environment variable segregation, and rate limiting.",
+        "Database: Optimized indexing, connection pooling, and connection reuse under peak load.",
+      ];
+    }
     if (matchedProblem?.constraints && matchedProblem.constraints.length > 0) {
       return matchedProblem.constraints;
     }
@@ -104,7 +192,7 @@ export function CodingWorkspaceView({
       "Time complexity should be O(n) or O(n log n).",
       "Space complexity should not exceed memory bounds.",
     ];
-  }, [matchedProblem]);
+  }, [isViva, matchedProblem]);
 
   // Execute Code via /api/execute sandbox API
   const handleRun = async () => {
@@ -214,56 +302,94 @@ export function CodingWorkspaceView({
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <span>Problem</span>
+            <span>{isViva ? "Viva Dossier" : "Problem"}</span>
             {activeProblemTab === "problem" && (
               <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveProblemTab("examples")}
-            className={`pb-1 transition cursor-pointer relative ${
-              activeProblemTab === "examples"
-                ? "text-foreground font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>Examples</span>
-            {activeProblemTab === "examples" && (
-              <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
+          {!isViva ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveProblemTab("examples")}
+                className={`pb-1 transition cursor-pointer relative ${
+                  activeProblemTab === "examples"
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Examples</span>
+                {activeProblemTab === "examples" && (
+                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveProblemTab("constraints")}
-            className={`pb-1 transition cursor-pointer relative ${
-              activeProblemTab === "constraints"
-                ? "text-foreground font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>Constraints</span>
-            {activeProblemTab === "constraints" && (
-              <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveProblemTab("constraints")}
+                className={`pb-1 transition cursor-pointer relative ${
+                  activeProblemTab === "constraints"
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Constraints</span>
+                {activeProblemTab === "constraints" && (
+                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveProblemTab("hints")}
-            className={`pb-1 transition cursor-pointer relative ${
-              activeProblemTab === "hints"
-                ? "text-foreground font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>Hints</span>
-            {activeProblemTab === "hints" && (
-              <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-            )}
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveProblemTab("hints")}
+                className={`pb-1 transition cursor-pointer relative ${
+                  activeProblemTab === "hints"
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Hints</span>
+                {activeProblemTab === "hints" && (
+                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveProblemTab("whiteboard")}
+                className={`pb-1 transition cursor-pointer relative flex items-center gap-1.5 ${
+                  activeProblemTab === "whiteboard"
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <PenTool className="h-3 w-3" />
+                <span>Architecture Whiteboard</span>
+                {activeProblemTab === "whiteboard" && (
+                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveProblemTab("hints")}
+                className={`pb-1 transition cursor-pointer relative flex items-center gap-1.5 ${
+                  activeProblemTab === "hints"
+                    ? "text-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <HelpCircle className="h-3 w-3" />
+                <span>Viva Rubric & Tips</span>
+                {activeProblemTab === "hints" && (
+                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
+            </>
+          )}
         </div>
 
         {/* Problem Title & Header Badges */}
@@ -279,7 +405,7 @@ export function CodingWorkspaceView({
                   ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                   : displayDifficulty.toLowerCase() === "hard"
                   ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
-                  : "bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                  : "bg-primary/15 border-primary/30 text-primary"
               }`}
             >
               {displayDifficulty}
@@ -296,42 +422,212 @@ export function CodingWorkspaceView({
           </div>
         </div>
 
-        {/* Tab 1: Problem Overview */}
+        {/* Tab 1: Problem / Viva Overview */}
         {activeProblemTab === "problem" && (
           <div className="space-y-4">
-            <div className="text-xs sm:text-sm leading-relaxed text-foreground/90 whitespace-pre-line font-sans">
-              {matchedProblem?.description ||
-                problemDescription ||
-                currentQuestion?.promptText ||
-                "Write your solution in the code editor and run your code to verify against the test cases."}
-            </div>
+            {isViva ? (
+              <div className="space-y-4">
+                {/* 1. Featured Project Card */}
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/20 text-primary">
+                        <Globe className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {vivaMetadata?.projectTitle ? `Featured Project: ${vivaMetadata.projectTitle}` : "Placement Candidate Dossier"}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground">
+                          Verified project in scope for live technical defense & viva
+                        </p>
+                      </div>
+                    </div>
+                    {vivaMetadata?.liveUrl && (
+                      <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-500">
+                        Live Deployed
+                      </span>
+                    )}
+                  </div>
 
-            {/* Quick Examples Preview */}
-            <div className="space-y-3 pt-2">
-              {displayExamples.slice(0, 2).map((ex, idx) => (
-                <div key={idx} className="space-y-1">
-                  <span className="text-xs font-semibold text-foreground">
-                    Example {idx + 1}:
-                  </span>
-                  <div className="rounded-xl border border-border bg-secondary/30 p-3 text-xs font-mono space-y-1 text-foreground">
+                  {(vivaMetadata?.liveUrl || vivaMetadata?.repoUrl) && (
+                    <div className="flex flex-wrap gap-2 text-xs pt-1">
+                      {vivaMetadata?.liveUrl && (
+                        <a
+                          href={vivaMetadata.liveUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card hover:bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors shadow-sm"
+                        >
+                          <Globe className="h-3.5 w-3.5 text-primary" />
+                          <span>Launch Live App</span>
+                          <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        </a>
+                      )}
+                      {vivaMetadata?.repoUrl && (
+                        <a
+                          href={vivaMetadata.repoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card hover:bg-secondary px-3 py-1.5 text-xs font-medium text-foreground transition-colors shadow-sm"
+                        >
+                          <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span>GitHub Repository</span>
+                          <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] pt-2.5 border-t border-border/40">
                     <div>
-                      <span className="font-semibold text-foreground">Input: </span>
-                      {ex.input}
+                      <span className="text-muted-foreground">Target Role:</span>{" "}
+                      <span className="font-semibold text-foreground">{vivaMetadata?.roleName || "Full Stack Developer"}</span>
                     </div>
                     <div>
-                      <span className="font-semibold text-foreground">Output: </span>
-                      {ex.output}
+                      <span className="text-muted-foreground">Candidate:</span>{" "}
+                      <span className="font-semibold text-foreground">{user?.fullName || user?.firstName || "Candidate"}</span>
                     </div>
-                    {ex.explanation && (
-                      <div className="text-muted-foreground pt-0.5">
-                        <span className="font-semibold text-foreground">Explanation: </span>
-                        {ex.explanation}
+                    {vivaMetadata?.techStack && (
+                      <div className="col-span-2 flex items-center gap-1.5 flex-wrap pt-1">
+                        <span className="text-muted-foreground">Verified Stack:</span>{" "}
+                        {vivaMetadata.techStack.split(",").map((tech) => (
+                          <span
+                            key={tech.trim()}
+                            className="rounded-md bg-secondary/80 border border-border/60 px-2 py-0.5 text-[10px] font-mono font-medium text-foreground"
+                          >
+                            {tech.trim()}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* 2. Viva Objectives & Defense Rubric */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                      Evaluation Objectives & Rubric
+                    </h5>
+                    <span className="text-[11px] text-muted-foreground">15–20 Mins Defense</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="rounded-xl border border-border/80 bg-secondary/20 p-3 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold">1</span>
+                        <span>System Architecture & Data Flow</span>
+                      </div>
+                      <ul className="text-[11px] text-muted-foreground space-y-1 pl-7 list-disc">
+                        <li>Component hierarchy, state hydration, and client-server boundaries.</li>
+                        <li>Database schema design, document relationships, and indexing strategies.</li>
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-secondary/20 p-3 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold">2</span>
+                        <span>API Design & Network Latency</span>
+                      </div>
+                      <ul className="text-[11px] text-muted-foreground space-y-1 pl-7 list-disc">
+                        <li>RESTful API endpoints, request/response lifecycle, and middleware architecture.</li>
+                        <li>Error boundary handling, response validation, and CORS hygiene.</li>
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-secondary/20 p-3 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold">3</span>
+                        <span>Engineering Trade-offs & Production Scaling</span>
+                      </div>
+                      <ul className="text-[11px] text-muted-foreground space-y-1 pl-7 list-disc">
+                        <li>Caching strategies, handling stream buffering, and database connection pooling.</li>
+                        <li>Code modularity, clean architecture, and technical debt management.</li>
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-secondary/20 p-3 space-y-1.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-primary text-[10px] font-bold">4</span>
+                        <span>Behavioral & Project Ownership</span>
+                      </div>
+                      <ul className="text-[11px] text-muted-foreground space-y-1 pl-7 list-disc">
+                        <li>STAR-method evaluation on handling production bugs, deadline pressure, and execution.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Real-Time Spoken Viva Instruction Note */}
+                <div className="rounded-xl border border-border/60 bg-muted/40 p-3 text-[11.5px] text-muted-foreground flex items-start gap-2.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1 shrink-0 animate-pulse" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-foreground text-xs">Live Voice Viva Active</p>
+                    <p>The AI interviewer converses with you in real-time. Use the scratchpad editor on the right if requested to draft an API endpoint, middleware, or optimize logic.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="prose prose-sm dark:prose-invert max-w-none text-xs sm:text-sm leading-relaxed text-foreground/90">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children }) => <h1 className="text-base sm:text-lg font-bold text-foreground mt-2 mb-2">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-sm sm:text-base font-semibold text-foreground mt-3 mb-1.5">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-xs sm:text-sm font-semibold text-foreground mt-2.5 mb-1">{children}</h3>,
+                      p: ({ children }) => <p className="mb-2 leading-relaxed text-foreground/85">{children}</p>,
+                      ul: ({ children }) => <ul className="list-disc pl-4 space-y-1 mb-2 text-foreground/85">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal pl-4 space-y-1 mb-2 text-foreground/85">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                      code: ({ children }) => <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground font-medium">{children}</code>,
+                      hr: () => <hr className="my-3 border-border/60" />,
+                    }}
+                  >
+                    {problemDescription ||
+                      matchedProblem?.description ||
+                      currentQuestion?.promptText ||
+                      "Welcome to your coding challenge."}
+                  </ReactMarkdown>
+                </div>
+
+                {/* Quick Examples Preview (Only for standalone DSA problems) */}
+                <div className="space-y-3 pt-2">
+                  {displayExamples.slice(0, 2).map((ex, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <span className="text-xs font-semibold text-foreground">
+                        Example {idx + 1}:
+                      </span>
+                      <div className="rounded-xl border border-border bg-secondary/30 p-3 text-xs font-mono space-y-1 text-foreground">
+                        <div>
+                          <span className="font-semibold text-foreground">Input: </span>
+                          {ex.input}
+                        </div>
+                        <div>
+                          <span className="font-semibold text-foreground">Output: </span>
+                          {ex.output}
+                        </div>
+                        {ex.explanation && (
+                          <div className="text-muted-foreground pt-0.5">
+                            <span className="font-semibold text-foreground">Explanation: </span>
+                            {ex.explanation}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Architecture Whiteboard */}
+        {activeProblemTab === "whiteboard" && (
+          <div className="flex-1 flex flex-col h-[520px] rounded-xl overflow-hidden border border-border bg-card">
+            <WhiteboardCanvas />
           </div>
         )}
 
@@ -384,24 +680,46 @@ export function CodingWorkspaceView({
           </div>
         )}
 
-        {/* Tab 4: Hints */}
+        {/* Tab 4: Hints / Viva Rubric */}
         {activeProblemTab === "hints" && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
               <HelpCircle className="h-4 w-4 text-primary" />
-              <span>Interviewer Algorithmic Hints</span>
+              <span>{isViva ? "Placement Viva Evaluation Rubric" : "Interviewer Algorithmic Hints"}</span>
             </div>
-            <div className="rounded-xl border border-border bg-secondary/25 p-3.5 text-xs text-muted-foreground space-y-2 leading-relaxed">
-              <p>
-                1. First clarify edge cases: What happens with empty inputs, single elements, or negative numbers?
-              </p>
-              <p>
-                2. Consider what data structure lets you perform lookups in O(1) time rather than O(n).
-              </p>
-              <p>
-                3. You can click <strong>Run</strong> at any time to compile and inspect output without submitting.
-              </p>
-            </div>
+            {isViva ? (
+              <div className="rounded-xl border border-border bg-secondary/25 p-3.5 text-xs text-muted-foreground space-y-3 leading-relaxed">
+                <div>
+                  <h6 className="font-semibold text-foreground mb-1">Scoring Criteria:</h6>
+                  <ul className="space-y-1 text-[11px]">
+                    <li>• <strong>Technical Depth (30%):</strong> Core understanding of JavaScript, React hooks, Node.js event loop, and database modeling.</li>
+                    <li>• <strong>Architecture & Defense (25%):</strong> Clear rationale behind project architecture decisions (component separation, API handling, auth).</li>
+                    <li>• <strong>Communication & Articulation (25%):</strong> Concise explanations, active listening, and structured answers.</li>
+                    <li>• <strong>Code & Optimization (20%):</strong> Writing clean, maintainable logic and analyzing trade-offs.</li>
+                  </ul>
+                </div>
+                <div className="pt-2 border-t border-border/40">
+                  <h6 className="font-semibold text-foreground mb-1">Candidate Pro-Tips:</h6>
+                  <ul className="space-y-1 text-[11px]">
+                    <li>• Speak aloud as you formulate ideas; Ananya listens actively to your train of thought.</li>
+                    <li>• Use the <strong>Architecture Whiteboard</strong> tab to draw schemas or data flows when explaining system architecture.</li>
+                    <li>• Feel free to ask clarifying questions before answering complex architecture prompts.</li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border bg-secondary/25 p-3.5 text-xs text-muted-foreground space-y-2 leading-relaxed">
+                <p>
+                  1. First clarify edge cases: What happens with empty inputs, single elements, or negative numbers?
+                </p>
+                <p>
+                  2. Consider what data structure lets you perform lookups in O(1) time rather than O(n).
+                </p>
+                <p>
+                  3. You can click <strong>Run</strong> at any time to compile and inspect output without submitting.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -459,7 +777,7 @@ export function CodingWorkspaceView({
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <span>Test Cases</span>
+                <span>{isViva ? "API Payloads" : "Test Cases"}</span>
                 {activeTestTab === "cases" && (
                   <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
                 )}
@@ -532,7 +850,7 @@ export function CodingWorkspaceView({
                   >
                     <div className="flex items-center gap-3 truncate">
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="font-semibold text-foreground">Case {idx + 1}</span>
+                      <span className="font-semibold text-foreground">{isViva ? `Payload ${idx + 1}` : `Case ${idx + 1}`}</span>
                       <span className="text-muted-foreground truncate">{ex.input}</span>
                     </div>
 

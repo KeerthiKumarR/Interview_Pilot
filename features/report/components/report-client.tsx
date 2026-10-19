@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { getScoreColor } from "@/lib/utils";
 import { FeedbackButton } from "@/features/feedback/components/feedback-button";
@@ -169,9 +169,12 @@ export function ReportClient({
   const [showShareTooltip, setShowShareTooltip] = useState(false);
   const [showCode, setShowCode] = useState(false);
 
+  const generatingRef = useRef(false);
+
   // Auto-generate report if not present
   useEffect(() => {
-    if (!report && !isGenerating) {
+    if (!report && !generatingRef.current) {
+      generatingRef.current = true;
       generateReport();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,11 +196,13 @@ export function ReportClient({
 
       const data = await res.json();
       setReport(data.report);
+      setError(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to generate report. Please try again.";
       setError(message);
     } finally {
       setIsGenerating(false);
+      generatingRef.current = false;
     }
   }
 
@@ -266,7 +271,7 @@ export function ReportClient({
       {isGenerating && <ReportProgress />}
 
       {/* Error state */}
-      {error && (
+      {error && !report && (
         <div className="mt-10 flex flex-col items-center gap-3 py-16">
           <p className="text-sm text-red-400 font-medium">{error}</p>
           <button

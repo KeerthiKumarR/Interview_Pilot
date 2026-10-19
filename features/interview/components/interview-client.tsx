@@ -49,6 +49,45 @@ interface InterviewClientProps {
   existingMessages: TranscriptMessage[];
 }
 
+export const VIVA_STAGES = [
+  {
+    order: 1,
+    title: "1. Intro & Role Fit",
+    stage: "intro",
+    category: "code_editor" as const,
+    durationMinutes: 3,
+    promptText: "Please introduce yourself, your technical background, and your focus in Full Stack engineering.",
+    expectedRubric: ["Role alignment", "Technical breadth", "Communication clarity"],
+  },
+  {
+    order: 2,
+    title: "2. Project Defense",
+    stage: "project_defense",
+    category: "code_editor" as const,
+    durationMinutes: 6,
+    promptText: "Walk me through how you designed, built, and deployed your featured project. What were the key architecture choices?",
+    expectedRubric: ["System design", "State & API design", "Deployment verification"],
+  },
+  {
+    order: 3,
+    title: "3. Architecture & Code",
+    stage: "technical_deepdive",
+    category: "code_editor" as const,
+    durationMinutes: 6,
+    promptText: "Let's explore technical trade-offs, database indexing, caching, and see how you implement or optimize code in the scratchpad.",
+    expectedRubric: ["Database performance", "Error handling", "Clean code practices"],
+  },
+  {
+    order: 4,
+    title: "4. Wrap-up & Scoring",
+    stage: "wrap_up",
+    category: "code_editor" as const,
+    durationMinutes: 3,
+    promptText: "To wrap up our placement viva, let's touch upon engineering collaboration and any questions you have for me.",
+    expectedRubric: ["Behavioral ownership", "Curiosity & culture fit", "Readiness evaluation"],
+  },
+];
+
 /**
  * Main interview layout — flexible, resizable panels.
  * Supports horizontal (side-by-side) and vertical (stacked) layouts.
@@ -111,7 +150,20 @@ export function InterviewClient({
   const questionsList = useInterviewStore((s) => s.questionsList);
   const currentQuestionIndex = useInterviewStore((s) => s.currentQuestionIndex);
 
+  const isPlacementViva = useMemo(() => {
+    return (
+      !interview.jobRoleId ||
+      interview.problemTitle?.toLowerCase().includes("viva") ||
+      interview.problemTitle?.toLowerCase().includes("placement") ||
+      interview.problemTitle?.toLowerCase().includes("project") ||
+      (interview as any).jobRole?.mode !== "hybrid"
+    );
+  }, [interview]);
+
   const currentStageNumber = useMemo(() => {
+    if (isPlacementViva) {
+      return Math.min(Math.max(1, (currentQuestionIndex ?? 0) + 1), 4);
+    }
     if (questionsList && questionsList.length > 0) {
       return currentQuestionIndex + 1;
     }
@@ -127,20 +179,29 @@ export function InterviewClient({
       default:
         return 1;
     }
-  }, [questionsList, currentQuestionIndex, activeCategory]);
+  }, [isPlacementViva, questionsList, currentQuestionIndex, activeCategory]);
 
   // Sync questions list from props if available
   useEffect(() => {
-    const qList = (interview as any).questions || interview.jobRole?.questions;
-    if (qList && qList.length > 0) {
-      const store = useInterviewStore.getState();
-      store.setQuestionsList(qList);
-      if (!store.currentQuestion) {
-        store.setCurrentQuestion(qList[0], 0);
-        if (qList[0].category) {
-          store.setActiveCategory(qList[0].category);
+    if (!isPlacementViva) {
+      const qList = (interview as any).questions || interview.jobRole?.questions;
+      if (qList && qList.length > 0) {
+        const store = useInterviewStore.getState();
+        store.setQuestionsList(qList);
+        if (!store.currentQuestion) {
+          store.setCurrentQuestion(qList[0], 0);
+          if (qList[0].category) {
+            store.setActiveCategory(qList[0].category);
+          }
         }
       }
+    } else {
+      // In Placement Viva, candidate is in full split workspace and dynamic conversational AI
+      const store = useInterviewStore.getState();
+      store.setQuestionsList(VIVA_STAGES as any);
+      store.setCurrentQuestion(VIVA_STAGES[0] as any, 0);
+      store.setActiveCategory("code_editor");
+      store.setInterviewMode("dynamic");
     }
   }, [interview]);
 
@@ -183,6 +244,33 @@ export function InterviewClient({
   const handleAdvanceToNextStage = useCallback(
     (isAutoSwitch: boolean = false) => {
       const s = useInterviewStore.getState();
+
+      if (isPlacementViva) {
+        const curIdx = s.currentQuestionIndex ?? 0;
+        if (curIdx < 3) {
+          const nextIdx = curIdx + 1;
+          s.setCurrentQuestionIndex(nextIdx);
+          const stageNames = [
+            "Intro & Role Fit",
+            "Project Defense",
+            "Architecture & Code",
+            "Wrap-up & Scoring",
+          ];
+          const nextStageTitle = stageNames[nextIdx] || `Stage ${nextIdx + 1}`;
+          const announcement = `Moving to Stage ${nextIdx + 1}: ${nextStageTitle}.`;
+          s.addMessage("assistant", announcement);
+          if (!s.isSpeakerMuted) {
+            speakBackend(announcement, interview.id);
+          }
+        } else {
+          s.addMessage(
+            "assistant",
+            "You have completed all stages of the placement viva. Feel free to review your code and conclude the interview."
+          );
+        }
+        return;
+      }
+
       const list = s.questionsList;
       const nextIndex = s.currentQuestionIndex + 1;
 
@@ -197,8 +285,8 @@ export function InterviewClient({
         s.setQuizSubmitted(false);
 
         const transitionPrefix = isAutoSwitch
-          ? `[Time Interval Expired] Auto-transitioning to ${nextQ.title || "next stage"}. `
-          : `Transitioning to ${nextQ.title || "next stage"}. `;
+          ? `Let's move on to ${nextQ.title || "the next part of our discussion"}. `
+          : `Moving on to ${nextQ.title || "the next stage"}. `;
 
         const promptAnnouncement = transitionPrefix + nextQ.promptText;
         s.addMessage("assistant", promptAnnouncement);
@@ -254,11 +342,20 @@ export function InterviewClient({
         }
       }
     },
-    [interview.id]
+    [interview.id, isPlacementViva]
   );
 
   const handlePrevStage = useCallback(() => {
     const s = useInterviewStore.getState();
+
+    if (isPlacementViva) {
+      const curIdx = s.currentQuestionIndex ?? 0;
+      if (curIdx > 0) {
+        s.setCurrentQuestionIndex(curIdx - 1);
+      }
+      return;
+    }
+
     const list = s.questionsList;
     const prevIndex = s.currentQuestionIndex - 1;
 
@@ -288,7 +385,7 @@ export function InterviewClient({
         s.setQuizSubmitted(false);
       }
     }
-  }, []);
+  }, [isPlacementViva]);
 
   // Master Interview Timer & Category Countdown Loop
   useEffect(() => {
@@ -321,13 +418,15 @@ export function InterviewClient({
         handleEndInterview();
       }
 
-      // 2. Stage / Category Time Countdown
-      if (s.categoryTimeRemainingSeconds > 1) {
-        s.setCategoryTimeRemainingSeconds(s.categoryTimeRemainingSeconds - 1);
-      } else if (s.categoryTimeRemainingSeconds === 1) {
-        s.setCategoryTimeRemainingSeconds(0);
-        if (s.currentQuestion?.autoSwitch !== false) {
-          handleAdvanceToNextStage(true);
+      // 2. Stage / Category Time Countdown (only in legacy scripted hybrid mode, never during dynamic viva)
+      if (s.interviewMode === "hybrid") {
+        if (s.categoryTimeRemainingSeconds > 1) {
+          s.setCategoryTimeRemainingSeconds(s.categoryTimeRemainingSeconds - 1);
+        } else if (s.categoryTimeRemainingSeconds === 1) {
+          s.setCategoryTimeRemainingSeconds(0);
+          if (s.currentQuestion?.autoSwitch !== false) {
+            handleAdvanceToNextStage(true);
+          }
         }
       }
     }, 1000);
@@ -355,12 +454,38 @@ export function InterviewClient({
         }
       },
       onDone: (fullText: string) => {
-        // Detect AI Category Switch Tool Call: [SWITCH_CATEGORY: category_name]
+        // 1. Detect AI Category Switch Tool Call: [SWITCH_CATEGORY: category_name]
         const match = fullText.match(/\[SWITCH_CATEGORY:\s*(conversation|code_editor|drawing|option_quiz)\]/i);
         if (match) {
           const targetCategory = match[1].toLowerCase() as any;
           useInterviewStore.getState().setActiveCategory(targetCategory);
         }
+
+        // 2. Detect AI Stage Transition: [STAGE: 1-4]
+        const stageMatch = fullText.match(/\[STAGE:\s*([1-4])\]/i);
+        if (stageMatch) {
+          const newStage = parseInt(stageMatch[1], 10);
+          const targetIndex = newStage - 1;
+          const cur = useInterviewStore.getState();
+          if (cur.currentQuestionIndex !== targetIndex) {
+            cur.setCurrentQuestionIndex(targetIndex);
+          }
+        } else if (isPlacementViva) {
+          // Automatic Turn Progression Fallback:
+          // Keep the UI stepper and checklist in sync as the conversation progresses naturally
+          const cur = useInterviewStore.getState();
+          const assistantMsgs = cur.messages.filter((m) => m.role === "assistant");
+          const count = assistantMsgs.length;
+          let expectedIndex = 0;
+          if (count >= 8) expectedIndex = 3;      // Stage 4: Wrap-up & Scoring
+          else if (count >= 5) expectedIndex = 2; // Stage 3: Architecture & Code
+          else if (count >= 2) expectedIndex = 1; // Stage 2: Project Defense
+
+          if (expectedIndex > (cur.currentQuestionIndex ?? 0)) {
+            cur.setCurrentQuestionIndex(expectedIndex);
+          }
+        }
+
         flushAndFinish();
       },
       onError: (_err: Error) => {
@@ -589,7 +714,67 @@ export function InterviewClient({
 
         currentStore.setAIState("thinking");
 
-        // 1. Check Studio Interview Mode and Structured Questions
+        if (isPlacementViva) {
+          currentStore.setInterviewMode("dynamic");
+          currentStore.setActiveCategory("code_editor");
+          currentStore.setQuestionsList(VIVA_STAGES as any);
+          currentStore.setCurrentQuestion(VIVA_STAGES[0] as any, 0);
+
+          let openingText = "";
+          try {
+            const res = await fetch(`/api/interviews/${interview.id}/start`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ voiceId: selectedVoiceId, interviewStyle }),
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.message && data.message.trim()) {
+                openingText = data.message;
+              }
+            }
+          } catch (error) {
+            console.error("Start viva error:", error);
+          }
+
+          if (!openingText) {
+            openingText = `Hi, I'm Ananya, and I'll be conducting your Placement Viva today. I'm excited to review your background and dive into your featured project. To get started with Stage 1, please introduce yourself and tell me a bit about your journey into full-stack development.`;
+          }
+
+          const startMsgId = `msg-start-${Date.now()}`;
+          useInterviewStore.setState({
+            messages: [
+              {
+                id: startMsgId,
+                role: "assistant",
+                content: openingText,
+                timestamp: Date.now(),
+              },
+            ],
+          });
+
+          if (!currentStore.isSpeakerMuted) {
+            currentStore.setAIState("speaking");
+            speakBackend(
+              openingText,
+              interview.id,
+              () => {
+                const s = useInterviewStore.getState();
+                s.setAIState(s.mode === "voice" ? "listening" : "idle");
+              },
+              () => {
+                const s = useInterviewStore.getState();
+                s.setAIState(s.mode === "voice" ? "listening" : "idle");
+              }
+            );
+          } else {
+            currentStore.setAIState(currentStore.mode === "voice" ? "listening" : "idle");
+          }
+          return;
+        }
+
+        // 1. Check Studio Interview Mode and Structured Questions (legacy hybrid roles only)
         let studioMode = interview.jobRole?.mode || "hybrid";
         let activeQuestions: any[] = [];
         try {
@@ -843,7 +1028,13 @@ export function InterviewClient({
 
   // ─── Dynamic Category View Router ────────────────────────
   let stageContent = null;
-  if (activeCategory === "conversation") {
+  if (isPlacementViva) {
+    stageContent = (
+      <CodingWorkspaceView
+        onSubmitCode={handleEndInterview}
+      />
+    );
+  } else if (activeCategory === "conversation") {
     stageContent = (
       <ConversationRoomView
         onNextCategory={() => handleAdvanceToNextStage(false)}

@@ -10,7 +10,7 @@ export type Difficulty = "easy" | "medium" | "hard";
 
 export type InterviewStyle = "standard" | "product" | "startup" | "service";
 
-export type InterviewDuration = 10 | 20 | 30 | 45;
+export type InterviewDuration = 10 | 15 | 20 | 30 | 45;
 
 export type InterviewStatus =
   | "setup"
@@ -156,16 +156,22 @@ export const DURATION_CONFIG: {
   followUpQuestions: { min: number; max: number };
 }[] = [
   {
-    value: 10,
-    label: "10 minutes",
+    value: 15,
+    label: "15 minutes (Standard)",
     available: true,
-    followUpQuestions: { min: 2, max: 3 },
+    followUpQuestions: { min: 3, max: 4 },
   },
   {
     value: 20,
-    label: "20 minutes",
+    label: "20 minutes (Deep Dive)",
     available: true,
     followUpQuestions: { min: 4, max: 5 },
+  },
+  {
+    value: 10,
+    label: "10 minutes (Quick Viva)",
+    available: true,
+    followUpQuestions: { min: 2, max: 3 },
   },
   {
     value: 30,
@@ -195,8 +201,9 @@ export const SUPPORTED_LANGUAGES = [
 // ─── Interview Durations (for UI selectors) ──
 
 export const INTERVIEW_DURATIONS = [
-  { value: 10, label: "10 min" },
-  { value: 20, label: "20 min" },
+  { value: 15, label: "15 min (Standard)" },
+  { value: 20, label: "20 min (Deep Dive)" },
+  { value: 10, label: "10 min (Quick)" },
   { value: 30, label: "30 min" },
 ] as const;
 

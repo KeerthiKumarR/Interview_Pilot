@@ -126,6 +126,12 @@ export async function POST(req: Request, context: RouteContext) {
       achievements: studentProfile.achievements,
     } : null);
 
+    const isViva =
+      !interview.jobRoleId ||
+      interview.problemTitle?.toLowerCase().includes("viva") ||
+      interview.problemTitle?.toLowerCase().includes("placement") ||
+      interview.problemTitle?.toLowerCase().includes("project");
+
     // Generate AI's opening message
     const baseSystemPrompt = buildInterviewerSystemPrompt({
       problemTitle: interview.problemTitle,
@@ -135,17 +141,28 @@ export async function POST(req: Request, context: RouteContext) {
       style: interviewStyle,
       duration: interview.duration,
       voiceId: voiceId || "local_female",
+      isViva,
     });
 
     const systemPrompt = `${baseSystemPrompt}${profileDirective}`;
 
-    let openingPrompt = `The candidate has just joined the interview. Introduce yourself as ${interviewerName} warmly.`;
-    if (studentProfile && Array.isArray(studentProfile.skills) && studentProfile.skills.length > 0) {
-      const topSkills = (studentProfile.skills as string[]).slice(0, 3).join(", ");
-      const firstProject = studentProfile.projects?.[0]?.title;
-      openingPrompt += ` Mention that you saw their background in ${topSkills}${firstProject ? ` and work on ${firstProject}` : ""}, and you're excited to dive into this session. Keep it concise to 2-3 sentences.`;
+    let openingPrompt = `The candidate has just joined the interview room. Introduce yourself warmly as ${interviewerName}, their senior technical interviewer for this placement viva.`;
+    if (isViva && studentProfile) {
+      const role = studentProfile.targetRole || "Software Engineer";
+      const topSkills = Array.isArray(studentProfile.skills) && studentProfile.skills.length > 0
+        ? (studentProfile.skills as string[]).slice(0, 3).join(", ")
+        : "";
+      const firstProject = studentProfile.projects?.[0]?.title?.trim();
+      openingPrompt += ` Welcome them to their ${role} Placement Viva.`;
+      if (topSkills) {
+        openingPrompt += ` Acknowledge their skills in ${topSkills}.`;
+      }
+      if (firstProject) {
+        openingPrompt += ` Reference their featured project "${firstProject}".`;
+      }
+      openingPrompt += ` To begin Stage 1 (Introduction & Role Fit), invite them to briefly introduce themselves and what inspired their technical journey into ${role}. Keep it warm, natural, and under 3 sentences so it's easy to listen to.`;
     } else {
-      openingPrompt += ` Let them know you'll be discussing the problem together. Keep it concise to 2-3 sentences.`;
+      openingPrompt += ` Welcome them to the technical interview session and invite them to introduce themselves and their technical background. Keep it concise to 2-3 sentences.`;
     }
 
     let openingMessage: string;
@@ -165,10 +182,21 @@ export async function POST(req: Request, context: RouteContext) {
       }
     } catch {
       // Fallback if AI provider is slow/unavailable
-      const skillNote = studentProfile?.skills && (studentProfile.skills as string[]).length > 0
-        ? ` with your background in ${(studentProfile.skills as string[]).slice(0, 2).join(" & ")}`
-        : "";
-      openingMessage = `Hi, I'm ${interviewerName}, and I'll be conducting your technical interview today${skillNote}. We have ${interview.duration} minutes to work through this ${interview.difficulty} problem. Take a moment to read through it, and when you're ready, walk me through your initial thoughts on how you'd approach it.`;
+      if (isViva && studentProfile) {
+        const role = studentProfile.targetRole || "Software Engineer";
+        const topSkills = Array.isArray(studentProfile.skills) && studentProfile.skills.length > 0
+          ? (studentProfile.skills as string[]).slice(0, 3).join(", ")
+          : "";
+        const firstProject = studentProfile.projects?.[0]?.title?.trim();
+        const skillsPhrase = topSkills ? ` in ${topSkills}` : "";
+        const projectPhrase = firstProject ? ` and your featured project, ${firstProject}` : "";
+        openingMessage = `Hi! I'm ${interviewerName}, and I'll be conducting your ${role} Placement Viva today. I was reviewing your background${skillsPhrase}${projectPhrase}. To kick things off with Stage 1, please introduce yourself and tell me a bit about your journey into ${role}.`;
+      } else {
+        const skillNote = studentProfile?.skills && (studentProfile.skills as string[]).length > 0
+          ? ` with your background in ${(studentProfile.skills as string[]).slice(0, 2).join(" & ")}`
+          : "";
+        openingMessage = `Hi, I'm ${interviewerName}, and I'll be conducting your technical interview today${skillNote}. We have ${interview.duration} minutes for this session. Take a moment to review the workspace, and when you're ready, walk me through your initial thoughts.`;
+      }
     }
 
     // Check if an opening message already exists for this interview

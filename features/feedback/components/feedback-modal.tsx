@@ -57,7 +57,7 @@ export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
         <DialogHeader>
           <DialogTitle>Leave Feedback</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Let us know what you think of AlgoPilot! Your feedback helps us improve.
+            Let us know what you think of Mirai Copilot! Your feedback helps us improve.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6 pt-4">

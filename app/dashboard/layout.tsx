@@ -1,12 +1,14 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { authorizeAdmin } from "@/lib/admin-auth";
+import { Badge } from "@/components/ui/badge";
+import { MiraiLogo } from "@/components/mirai-logo";
 
 /**
- * Dashboard layout — top navigation with logo, current page title, user controls.
- * No sidebar per UI/UX spec: "No sidebar. No unnecessary menu items."
+ * Dashboard layout — top navigation with logo, module navigation, user controls.
  */
 export default async function DashboardLayout({
   children,
@@ -19,67 +21,68 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
-  const clerk = await clerkClient();
-  const user = await clerk.users.getUser(userId);
-  const email = user.emailAddresses[0]?.emailAddress;
-  const isAdmin = email === (process.env.ADMIN_EMAIL || "ghodakepravin154@gmail.com");
+  const isAdmin = await authorizeAdmin();
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Top Navigation */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6 bg-background">
-        {/* Left: Logo */}
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-foreground"
-          >
-            <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" />
-          </svg>
-          <span className="text-sm font-semibold tracking-tight">
-            AlgoPilot
-          </span>
-        </Link>
-
-        {/* Center: Empty for now — will show "Current Interview" during interviews */}
-
-        {/* Right: User controls */}
+        {/* Left: Logo & Branding */}
         <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/profile-intake"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Profile Hub
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <MiraiLogo size={28} showText={true} textClassName="text-sm font-bold tracking-tight text-foreground" />
           </Link>
-          <Link
-            href="/dashboard/review"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Review Hub
-          </Link>
-          <Link
-            href="/dashboard/readiness"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Readiness
-          </Link>
-          {isAdmin && (
-            <Link 
-              href="/admin" 
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          <Badge variant="secondary" className="hidden sm:inline-flex text-[10px] py-0 px-1.5 font-semibold">
+            MSOT
+          </Badge>
+        </div>
+
+        {/* Right: Module Navigation & User controls */}
+        <div className="flex items-center gap-4">
+          <nav className="flex items-center gap-3 text-xs sm:text-sm font-medium">
+            <Link
+              href="/dashboard/profile-intake"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Admin
+              1. Profile Intake
             </Link>
-          )}
-          <ThemeToggle />
-          <UserButton />
+            <Link
+              href="/dashboard/review"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              2. Review Engine
+            </Link>
+            <Link
+              href="/dashboard"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              3. Mock Interview
+            </Link>
+            <Link
+              href="/dashboard/readiness"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              4. Readiness Score
+            </Link>
+            <Link
+              href="/dashboard/jobs"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              5. Jobs & Drives
+            </Link>
+            {isAdmin && (
+              <Link
+                href="/admin/jobs"
+                className="text-primary font-semibold hover:underline transition-colors"
+              >
+                MSOT Staff Board
+              </Link>
+            )}
+          </nav>
+          <div className="flex items-center gap-2 pl-2 border-l border-border">
+            <ThemeToggle />
+            <UserButton />
+          </div>
         </div>
       </header>
 

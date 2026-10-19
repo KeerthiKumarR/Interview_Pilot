@@ -2,6 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
+import { speak, getBestFemaleVoice } from "@/hooks/use-web-speech";
 
 /**
  * Centralized Text-to-Speech hook using OpenRouter Backend TTS.
@@ -17,6 +18,10 @@ import { useInterviewStore } from "@/features/interview/store/interview-store";
 export function cleanTextForSpeech(text: string): string {
   if (!text) return "";
   return text
+    // Remove internal control tags
+    .replace(/\[STAGE:\s*[1-4]\]/gi, "")
+    .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
+    .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
     // Remove markdown code blocks
     .replace(/```[\s\S]*?```/g, " ")
     // Remove bold/italic markers
@@ -46,21 +51,21 @@ export function cleanTextForSpeech(text: string): string {
 let cachedTtsSpeed = 1.0;
 let isTtsSpeedFetched = false;
 
-async function getActiveTtsSpeed(): Promise<number> {
-  if (isTtsSpeedFetched) return cachedTtsSpeed;
-  try {
-    const res = await fetch("/api/tts/settings");
-    if (res.ok) {
-      const data = await res.json();
-      if (typeof data.ttsSpeed === "number" && !isNaN(data.ttsSpeed)) {
+if (typeof window !== "undefined") {
+  fetch("/api/tts/settings")
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && typeof data.ttsSpeed === "number" && !isNaN(data.ttsSpeed)) {
         cachedTtsSpeed = data.ttsSpeed;
       }
-    }
-  } catch (e) {
-    console.warn("Failed to fetch TTS speed setting:", e);
-  } finally {
-    isTtsSpeedFetched = true;
-  }
+      isTtsSpeedFetched = true;
+    })
+    .catch(() => {
+      isTtsSpeedFetched = true;
+    });
+}
+
+function getActiveTtsSpeed(): number {
   return cachedTtsSpeed;
 }
 
@@ -145,16 +150,13 @@ async function speakBrowserFallback(
   onError?: () => void
 ) {
   try {
-    const { speak } = await import("@/hooks/use-web-speech");
     const rate = await getActiveTtsSpeed();
     const voices = typeof window !== "undefined" ? window.speechSynthesis?.getVoices?.() || [] : [];
-    const matchedVoice = voices.find(v => {
-      const nameLower = v.name.toLowerCase();
-      return nameLower.includes("female") || nameLower.includes("zira") || nameLower.includes("samantha") || nameLower.includes("hazel") || nameLower.includes("siri") || nameLower.includes("karen");
-    });
+    const matchedVoice = getBestFemaleVoice(voices);
 
     speak(text, {
       rate,
+      pitch: 1.1,
       voiceName: matchedVoice?.name || null,
       onEnd,
       onError,
@@ -304,18 +306,13 @@ export function useTTS(): UseTTSResult {
       store.setAIState("speaking");
 
       if (selectedVoiceId.startsWith("local_")) {
-        const { speak } = await import("@/hooks/use-web-speech");
-        const gender = selectedVoiceId === "local_female" ? "female" : "male";
-        
+        const isFemale = selectedVoiceId === "local_female";
         const voices = typeof window !== "undefined" ? window.speechSynthesis.getVoices() : [];
-        const matchedVoice = voices.find(v => {
-          const nameLower = v.name.toLowerCase();
-          const isFemale = nameLower.includes("female") || nameLower.includes("zira") || nameLower.includes("samantha") || nameLower.includes("hazel") || nameLower.includes("siri");
-          return gender === "female" ? isFemale : !isFemale;
-        });
+        const matchedVoice = isFemale ? getBestFemaleVoice(voices) : voices.find(v => !v.name.toLowerCase().includes("female"));
 
         speak(sentence, {
-          rate: await getActiveTtsSpeed(),
+          rate: getActiveTtsSpeed(),
+          pitch: isFemale ? 1.1 : 1.0,
           voiceName: matchedVoice?.name || null,
           onEnd: () => {
             isSpeakingRef.current = false;
@@ -415,7 +412,9 @@ export function useTTS(): UseTTSResult {
   }, []);
 
   /**
-   * Buffer a token for TTS. Groups text into larger paragraphs or chunks (>180 chars) for natural intonation.
+   * Ultra-low-latency streaming sentence chunker for TTS.
+   * Splits on sentence boundaries (. ! ? \n) as soon as the first thought/clause is ready (>= 12 chars),
+   * allowing the speech synthesizer to start speaking in < 300ms while the rest of the response streams.
    */
   const bufferToken = useCallback(
     (token: string) => {
@@ -425,31 +424,44 @@ export function useTTS(): UseTTSResult {
       sentenceBufferRef.current += token;
       const buf = sentenceBufferRef.current;
 
-      // Check if we have a paragraph separator (double newline or single newline if it marks a list item)
-      const paragraphIndex = buf.indexOf("\n\n");
-      
-      if (paragraphIndex !== -1) {
-        const paragraph = buf.slice(0, paragraphIndex).trim();
-        if (paragraph.length > 2) {
+      // 1. Check for immediate paragraph or newline break
+      const newlineIndex = buf.indexOf("\n\n");
+      if (newlineIndex !== -1) {
+        const paragraph = buf.slice(0, newlineIndex).trim();
+        if (paragraph.length >= 8) {
           ttsQueueRef.current.push(paragraph);
+          sentenceBufferRef.current = buf.slice(newlineIndex + 2);
+          speakNextInQueue();
+          return;
         }
-        sentenceBufferRef.current = buf.slice(paragraphIndex + 2);
-        speakNextInQueue();
-      } else if (buf.length > 200) {
-        // Find the last sentence boundary (. ! ?) in the buffer to avoid splitting mid-sentence
-        const lastSentenceBoundary = Math.max(
-          buf.lastIndexOf("."),
-          buf.lastIndexOf("?"),
-          buf.lastIndexOf("!")
+      }
+
+      // 2. Early sentence boundary detection (. ! ? followed by space, quote, or end)
+      // Matches clean sentences as soon as they complete!
+      const sentenceMatch = buf.match(/^([\s\S]*?[.?!])(?:\s+|$)/);
+      if (sentenceMatch) {
+        const candidateSentence = sentenceMatch[1].trim();
+        // Avoid splitting on common abbreviations or decimal numbers
+        const isAbbrev = /(?:e\.g|i\.e|vs|etc|Dr|Mr|Ms|\d+\.\d+)$/i.test(candidateSentence);
+        if (!isAbbrev && candidateSentence.length >= 12) {
+          ttsQueueRef.current.push(candidateSentence);
+          sentenceBufferRef.current = buf.slice(sentenceMatch[0].length);
+          speakNextInQueue();
+          return;
+        }
+      }
+
+      // 3. Fallback for long clauses without punctuation (> 110 chars)
+      if (buf.length > 110) {
+        const clauseBoundary = Math.max(
+          buf.lastIndexOf(", "),
+          buf.lastIndexOf("; "),
+          buf.lastIndexOf(" - ")
         );
-        
-        // Ensure we don't split on abbreviation or very early in the buffer
-        if (lastSentenceBoundary !== -1 && lastSentenceBoundary > 50) {
-          const chunk = buf.slice(0, lastSentenceBoundary + 1).trim();
-          if (chunk.length > 2) {
-            ttsQueueRef.current.push(chunk);
-          }
-          sentenceBufferRef.current = buf.slice(lastSentenceBoundary + 1);
+        if (clauseBoundary > 35) {
+          const clause = buf.slice(0, clauseBoundary).trim();
+          ttsQueueRef.current.push(clause);
+          sentenceBufferRef.current = buf.slice(clauseBoundary + 1);
           speakNextInQueue();
         }
       }

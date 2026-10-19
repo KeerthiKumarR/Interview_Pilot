@@ -1,28 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "ghodakepravin154@gmail.com";
-
-async function authorizeAdmin() {
-  const { userId } = await auth();
-  if (!userId) return false;
-
-  try {
-    const clerk = await clerkClient();
-    const user = await clerk.users.getUser(userId);
-    const email = user.emailAddresses[0]?.emailAddress;
-    return email === ADMIN_EMAIL;
-  } catch (error) {
-    console.error("Failed to authorize admin:", error);
-    return false;
-  }
-}
+import { authorizeAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: Request) {
   try {
     if (!(await authorizeAdmin())) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized", events: [], pagination: { total: 0, page: 1, limit: 50, totalPages: 1 } },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(req.url);
