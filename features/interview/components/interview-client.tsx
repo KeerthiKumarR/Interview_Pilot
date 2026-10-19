@@ -606,6 +606,11 @@ export function InterviewClient({
               state.setSelectedOptionIndex(null);
               state.setQuizSubmitted(false);
               state.addMessage("assistant", nextQ.promptText);
+            } else if (shouldAdvance && !nextQ) {
+              state.addMessage(
+                "assistant",
+                "You have completed all interview questions! Take your time to review your code and click Submit when ready."
+              );
             }
             state.setAIState(state.mode === "voice" ? "listening" : "idle");
           }

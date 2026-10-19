@@ -181,26 +181,50 @@ export async function handleProjectRequest(req, res) {
       }
     } else if (style !== "dsa") {
       // Placement Viva anchored to target role and tech stack for candidates who haven't uploaded resume yet
+      const isBehavioral = style === "service";
       let roleRecord = null;
+
       if (jobRoleId) {
         roleRecord = await prisma.jobRole.findUnique({ where: { id: jobRoleId } });
       }
       if (!roleRecord) {
-        roleRecord =
-          (await prisma.jobRole.findFirst({ where: { isDefault: true } })) ||
-          (await prisma.jobRole.findFirst({ where: { isActive: true } }));
+        if (isBehavioral) {
+          roleRecord = await prisma.jobRole.findFirst({
+            where: { title: { contains: "HR", mode: "insensitive" } },
+          });
+        } else {
+          roleRecord =
+            (await prisma.jobRole.findFirst({
+              where: {
+                isDefault: true,
+                NOT: { title: { contains: "HR", mode: "insensitive" } },
+              },
+            })) ||
+            (await prisma.jobRole.findFirst({
+              where: {
+                isActive: true,
+                NOT: { title: { contains: "HR", mode: "insensitive" } },
+              },
+            }));
+        }
       }
 
-      const roleName = studentProfile?.targetRole || roleRecord?.title || "Full Stack Developer";
+      const roleName =
+        studentProfile?.targetRole ||
+        (isBehavioral ? "HR & Behavioral Fit" : roleRecord?.title || "Full Stack Developer");
+
       const stackSkills =
         Array.isArray(studentProfile?.skills) && studentProfile.skills.length > 0
           ? (studentProfile.skills as string[]).slice(0, 6).join(", ")
-          : roleRecord?.targetSkills || "React, Next.js, Node.js, TypeScript, REST APIs, Databases";
+          : roleRecord?.targetSkills || (isBehavioral ? "STAR Method, Teamwork, Ownership, Leadership" : "React, Next.js, Node.js, TypeScript, REST APIs, Databases");
 
-      problemTitle = `${roleName} Placement Viva: Core Tech Stack & Architecture`;
-      problemDescription = `# ${roleName} Placement Viva Dossier
-- **Evaluation Track**: Placement Technical Viva
-- **Target Tech Stack**: ${stackSkills}
+      problemTitle = isBehavioral
+        ? "HR & Situational Fit Viva: Leadership & Behavioral Competency"
+        : `${roleName} Placement Viva: Core Tech Stack & Architecture`;
+
+      problemDescription = `# ${problemTitle}
+- **Evaluation Track**: ${isBehavioral ? "Behavioral & HR Competency (STAR Method)" : "Placement Technical Viva"}
+- **Target Focus**: ${stackSkills}
 - **Experience Level**: Campus Placement / Fresher
 
 ---
