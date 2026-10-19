@@ -55,11 +55,13 @@ export function ResumeDropzone({
     let pageCount = 1;
 
     try {
-      const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      if (pdfjs.GlobalWorkerOptions && !pdfjs.GlobalWorkerOptions.workerSrc) {
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version || "5.4.296"}/legacy/build/pdf.worker.min.mjs`;
+      }
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = getDocument({
+      const loadingTask = pdfjs.getDocument({
         data: new Uint8Array(arrayBuffer),
-        isEvalSupported: false,
         useSystemFonts: true,
       });
       const doc = await loadingTask.promise;
@@ -205,7 +207,7 @@ export function ResumeDropzone({
     }
 
     return {
-      text: text.length > 0 ? text : `Extracted text from ${file.name}`,
+      text: text.trim(),
       pageCount,
       detectedSkills,
       detectedLinks: {
@@ -260,8 +262,11 @@ export function ResumeDropzone({
 
       // If server parsed successfully with extracted text
       if (data && data.success && data.text && data.text.length > 20) {
+        const skillsCount = data.detectedSkills?.length || 0;
         toast.success(
-          `Resume parsed! Extracted ${data.detectedSkills?.length || 0} skills.`
+          skillsCount > 0
+            ? `Resume parsed! Extracted ${skillsCount} skills.`
+            : `Resume parsed! You can add or customize your skills below.`
         );
 
         onParsedSuccess({
@@ -277,9 +282,12 @@ export function ResumeDropzone({
 
       // If server returned non-JSON (like an HTML redirect/error) or failed, trigger client fallback
       const clientFallback = await extractClientSidePdf(file);
-      if (clientFallback.text.length > 20) {
+      if (clientFallback.text && clientFallback.text.length > 20) {
+        const skillsCount = clientFallback.detectedSkills.length;
         toast.success(
-          `Resume parsed! Extracted ${clientFallback.detectedSkills.length} skills.`
+          skillsCount > 0
+            ? `Resume parsed! Extracted ${skillsCount} skills.`
+            : `Resume parsed! You can add or customize your skills below.`
         );
 
         onParsedSuccess({
@@ -304,9 +312,12 @@ export function ResumeDropzone({
       // Try client extraction one last time in case network threw
       try {
         const clientFallback = await extractClientSidePdf(file);
-        if (clientFallback.text.length > 20) {
+        if (clientFallback.text && clientFallback.text.length > 20) {
+          const skillsCount = clientFallback.detectedSkills.length;
           toast.success(
-            `Resume parsed! Extracted ${clientFallback.detectedSkills.length} skills.`
+            skillsCount > 0
+              ? `Resume parsed! Extracted ${skillsCount} skills.`
+              : `Resume parsed! You can add or customize your skills below.`
           );
           onParsedSuccess({
             fileName: file.name,

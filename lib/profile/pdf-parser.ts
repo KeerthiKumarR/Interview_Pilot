@@ -75,7 +75,6 @@ async function extractPdfTextInProcess(buffer: Buffer): Promise<{ text: string; 
     const uint8Array = new Uint8Array(buffer);
     const loadingTask = getDocument({
       data: uint8Array,
-      isEvalSupported: false,
       useSystemFonts: true,
     });
 
