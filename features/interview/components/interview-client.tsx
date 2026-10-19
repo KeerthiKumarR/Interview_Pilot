@@ -28,6 +28,7 @@ import { useFaceDetection } from "@/hooks/use-face-detection";
 
 import { useRouter } from "next/navigation";
 import { speakBackend } from "@/hooks/use-tts";
+import { getVivaStarterCode } from "@/lib/interview/starter-code";
 
 interface InterviewClientProps {
   interview: {
@@ -694,6 +695,24 @@ export function InterviewClient({
 
     const isResuming = existingMessages.length > 0;
 
+    let effectiveCode = interview.code || "";
+    const lang = (interview.language || "").toLowerCase().trim();
+    // Auto-correct language mismatch if legacy session had JavaScript boilerplate for C++, Java, Go, Python
+    if (lang && lang !== "javascript" && lang !== "typescript") {
+      const isMismatchedJs =
+        effectiveCode.includes("export async function handleRequest") ||
+        effectiveCode.includes("export async function handleProjectRequest") ||
+        effectiveCode.includes("Language: JavaScript / TypeScript");
+      if (isMismatchedJs || !effectiveCode.trim()) {
+        effectiveCode = getVivaStarterCode(
+          lang,
+          interview.problemTitle.split(":")[0]?.replace(/Placement Viva/i, "").trim() || "Technical Placement",
+          "System Architecture",
+          "Core Tech Stack & Optimization"
+        );
+      }
+    }
+
     initInterview({
       interviewId: interview.id,
       language: interview.language,
@@ -701,7 +720,7 @@ export function InterviewClient({
       duration: interview.duration,
       problemTitle: interview.problemTitle,
       problemDescription: interview.problemDescription,
-      code: interview.code,
+      code: effectiveCode,
       status: isResuming ? "in_progress" : "setup",
       timeRemainingSeconds: computedTime,
     });

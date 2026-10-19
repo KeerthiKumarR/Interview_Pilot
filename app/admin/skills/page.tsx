@@ -85,10 +85,13 @@ const EVALUATOR_SAMPLE_TEMPLATE = `# Custom Report Evaluator Philosophy
 - Provide a 3-step practice plan highlighting exact topics and problem archetypes the candidate should practice.
 `;
 
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
+
 export default function SkillsManagerPage() {
   const { notify } = useAdminNotifications();
-  const [skills, setSkills] = useState<AiSkill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cacheData, loading: skillsLoading, refresh, mutate } = useCachedData<{ skills: AiSkill[] }>("/api/admin/skills");
+  const skills = cacheData?.skills || [];
+  const loading = skillsLoading && skills.length === 0;
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "interviewer" | "evaluator" | "custom">("all");
 
@@ -114,23 +117,6 @@ export default function SkillsManagerPage() {
   const singleFileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    fetchSkills();
-  }, []);
-
-  const fetchSkills = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/skills");
-      if (!res.ok) throw new Error("Failed to load AI skills");
-      const data = await res.json();
-      setSkills(data.skills || []);
-    } catch (err: any) {
-      notify("error", "Failed to Load Skills", err.message || "Could not fetch skills", "FETCH_SKILLS");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleOpenCreateModal = () => {
     setEditingSkillId(null);
@@ -286,12 +272,13 @@ export default function SkillsManagerPage() {
       if (!res.ok) throw new Error(data.error || "Failed to save skill");
 
       setIsModalOpen(false);
-      await fetchSkills();
+      invalidateCache("/api/admin/skills");
+      invalidateCache("/api/skills");
+      await refresh();
       notify(
         "success",
         editingSkillId ? "Skill Updated" : "Skill Created",
-        `"${payload.name}" is now ready for Job Roles and Studio.`,
-        "SAVE_SKILL"
+        `"${payload.name}" is now ready for Job Roles and Studio.`
       );
     } catch (err: any) {
       setFormError(err.message || "Failed to save skill");
@@ -317,10 +304,14 @@ export default function SkillsManagerPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete skill");
 
-      setSkills((prev) => prev.filter((s) => s.id !== skill.id));
-      notify("info", "Skill Deleted", `Removed "${skill.name}" from library.`, "DELETE_SKILL");
+      mutate((prev) => ({
+        skills: (prev?.skills || []).filter((s) => s.id !== skill.id),
+      }));
+      invalidateCache("/api/admin/skills");
+      invalidateCache("/api/skills");
+      notify("info", "Skill Deleted", `Removed "${skill.name}" from library.`);
     } catch (err: any) {
-      notify("error", "Delete Failed", err.message || "Could not delete skill", "ERROR_SKILL");
+      notify("error", "Delete Failed", err.message || "Could not delete skill");
     }
   };
 

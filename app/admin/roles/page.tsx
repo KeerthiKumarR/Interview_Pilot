@@ -48,12 +48,16 @@ interface JobRole {
   };
 }
 
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
+
 export default function InterviewRolesPage() {
   const { notify } = useAdminNotifications();
-  const [roles, setRoles] = useState<JobRole[]>([]);
-  const [interviewerSkills, setInterviewerSkills] = useState<{ id: string; name: string; slug: string; isBuiltIn: boolean }[]>([]);
-  const [evaluatorSkills, setEvaluatorSkills] = useState<{ id: string; name: string; slug: string; isBuiltIn: boolean }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cacheData, loading: rolesLoading, refresh, mutate } = useCachedData<{ roles: JobRole[] }>("/api/admin/roles");
+  const roles = cacheData?.roles || [];
+  const { data: skillsData } = useCachedData<{ interviewers: any[]; evaluators: any[] }>("/api/skills");
+  const interviewerSkills = skillsData?.interviewers || [];
+  const evaluatorSkills = skillsData?.evaluators || [];
+  const loading = rolesLoading && roles.length === 0;
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -71,49 +75,22 @@ export default function InterviewRolesPage() {
   const [copyFromId, setCopyFromId] = useState<string>("global");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchRolesAndSkills();
-  }, []);
-
-  const fetchRolesAndSkills = async () => {
-    try {
-      setLoading(true);
-      const [rolesRes, skillsRes] = await Promise.all([
-        fetch("/api/admin/roles"),
-        fetch("/api/skills"),
-      ]);
-
-      if (!rolesRes.ok) throw new Error("Failed to load job roles");
-      const data = await rolesRes.json();
-      setRoles(data.roles || []);
-
-      if (skillsRes.ok) {
-        const skillsData = await skillsRes.json();
-        if (skillsData.interviewers) setInterviewerSkills(skillsData.interviewers);
-        if (skillsData.evaluators) setEvaluatorSkills(skillsData.evaluators);
-      }
-    } catch (err: any) {
-      notify("error", "Failed to Load Roles", err.message || "Could not fetch roles", "FETCH_ROLES");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSetDefault = async (roleId: string, title: string) => {
     try {
       const res = await fetch(`/api/admin/roles/${roleId}/set-default`, {
         method: "POST",
       });
       if (!res.ok) throw new Error("Failed to set default role");
-      setRoles((prev) =>
-        prev.map((r) => ({
+      mutate((prev) => ({
+        roles: (prev?.roles || []).map((r) => ({
           ...r,
           isDefault: r.id === roleId,
-        }))
-      );
-      notify("success", "Default Role Set", `"${title}" is now the default interview role.`, "SET_DEFAULT_ROLE");
+        })),
+      }));
+      invalidateCache("/api/admin/roles");
+      notify("success", "Default Role Set", `"${title}" is now the default interview role.`);
     } catch (err: any) {
-      notify("error", "Error", err.message || "Failed to update default role", "ERROR_ROLE");
+      notify("error", "Error", err.message || "Failed to update default role");
     }
   };
 
@@ -125,10 +102,13 @@ export default function InterviewRolesPage() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Failed to delete role");
-      setRoles((prev) => prev.filter((r) => r.id !== roleId));
-      notify("info", "Role Deleted", `Removed "${title}" from job roles.`, "DELETE_ROLE");
+      mutate((prev) => ({
+        roles: (prev?.roles || []).filter((r) => r.id !== roleId),
+      }));
+      invalidateCache("/api/admin/roles");
+      notify("info", "Role Deleted", `Removed "${title}" from job roles.`);
     } catch (err: any) {
-      notify("error", "Delete Failed", err.message || "Could not delete role", "ERROR_ROLE");
+      notify("error", "Delete Failed", err.message || "Could not delete role");
     }
   };
 
@@ -160,12 +140,15 @@ export default function InterviewRolesPage() {
       }
 
       const data = await res.json();
-      setRoles((prev) => [data.role, ...prev]);
+      mutate((prev) => ({
+        roles: [data.role, ...(prev?.roles || [])],
+      }));
+      invalidateCache("/api/admin/roles");
       setIsCreateModalOpen(false);
       resetForm();
-      notify("success", "Job Role Created", `Created "${data.role.title}" successfully.`, "CREATE_ROLE");
+      notify("success", "Job Role Created", `Created "${data.role.title}" successfully.`);
     } catch (err: any) {
-      notify("error", "Creation Failed", err.message || "Could not create role", "ERROR_ROLE");
+      notify("error", "Creation Failed", err.message || "Could not create role");
     } finally {
       setIsSubmitting(false);
     }
@@ -219,7 +202,7 @@ export default function InterviewRolesPage() {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={fetchRolesAndSkills}
+                onClick={() => refresh()}
                 className="p-2.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary transition cursor-pointer"
                 title="Refresh roles"
               >

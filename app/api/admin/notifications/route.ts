@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/notifications
@@ -8,7 +8,7 @@ import { authorizeAdmin } from "@/lib/admin-auth";
  * Strictly read-only to preserve the audit trail.
  */
 export async function GET() {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -41,7 +41,7 @@ export async function GET() {
  * Creates an immutable audit notification entry.
  */
 export async function POST(req: Request) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

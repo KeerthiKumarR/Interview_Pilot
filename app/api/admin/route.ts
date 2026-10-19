@@ -1,14 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
+import { invalidateUserSessionCache } from "@/lib/auth-user";
 
 export async function GET() {
-  if (!(await authorizeAdmin())) {
+  const isStaff = await authorizeStaff();
+  if (!isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const isAdmin = await authorizeAdmin();
+
   try {
-    const settings = await prisma.systemSetting.findMany();
+    // Only return sensitive system settings and API keys to Super Admins
+    const settings = isAdmin ? await prisma.systemSetting.findMany() : [];
     const feedbacks = await prisma.feedback.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -45,7 +50,14 @@ export async function GET() {
       return acc;
     }, {} as Record<string, string>);
 
-    return NextResponse.json({ settings: settingsMap, feedbacks, users });
+    return NextResponse.json(
+      { settings: settingsMap, feedbacks, users, currentUserRole: isAdmin ? "admin" : "staff" },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     console.error("Admin GET Error:", error);
     return NextResponse.json({ error: "Failed to fetch admin data" }, { status: 500 });
@@ -53,12 +65,38 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await authorizeAdmin())) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const body = await req.json();
+
+    // ─── Dynamic User Role Management (Admin only) ─────────────
+    if (body.action === "update_role") {
+      if (!(await authorizeAdmin())) {
+        return NextResponse.json({ error: "Unauthorized: Super-Admin required to modify roles." }, { status: 403 });
+      }
+
+      const { userId, role } = body;
+      if (!userId || !["student", "staff", "admin"].includes(role)) {
+        return NextResponse.json({ error: "Invalid userId or role provided." }, { status: 400 });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { role },
+        select: { id: true, clerkId: true, name: true, email: true, role: true },
+      });
+
+      invalidateUserSessionCache(updatedUser.clerkId);
+
+      return NextResponse.json({
+        success: true,
+        message: `Role for ${updatedUser.name || updatedUser.email} updated to ${role}.`,
+        user: updatedUser,
+      });
+    }
+
+    if (!(await authorizeAdmin())) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     // ─── Direct Key Testing Action ────────────────────────────
     if (body.action === "test_key") {

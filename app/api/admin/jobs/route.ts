@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const isAdmin = await authorizeAdmin();
-    if (!isAdmin) {
+    const isStaff = await authorizeStaff();
+    if (!isStaff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -79,10 +79,17 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      jobs: enrichedJobs,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        jobs: enrichedJobs,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Error in GET /api/admin/jobs:", error);
     return NextResponse.json(
@@ -98,8 +105,8 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
-    const isAdmin = await authorizeAdmin();
-    if (!isAdmin) {
+    const isStaff = await authorizeStaff();
+    if (!isStaff) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

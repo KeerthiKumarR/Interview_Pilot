@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 import { CODING_PROBLEMS } from "@/data/problems";
 import { Prisma } from "@prisma/client";
 
@@ -88,8 +88,8 @@ const INITIAL_QUIZ_PROBLEMS = [
 ];
 
 export async function GET(req: Request) {
-  const isAdmin = await authorizeAdmin();
-  if (!isAdmin) {
+  const isStaff = await authorizeStaff();
+  if (!isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -181,8 +181,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const isAdmin = await authorizeAdmin();
-  if (!isAdmin) {
+  const isStaff = await authorizeStaff();
+  if (!isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -244,8 +244,8 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const isAdmin = await authorizeAdmin();
-  if (!isAdmin) {
+  const isStaff = await authorizeStaff();
+  if (!isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -306,8 +306,8 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const isAdmin = await authorizeAdmin();
-  if (!isAdmin) {
+  const isStaff = await authorizeStaff();
+  if (!isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

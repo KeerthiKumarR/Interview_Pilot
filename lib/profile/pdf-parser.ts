@@ -217,11 +217,24 @@ export async function parseResumePdf(buffer: Buffer): Promise<ParsedResumeResult
     }
   }
 
-  // Also check for GitHub handles written like `@username` or `GitHub: username`
+  // Also check for LinkedIn handles written like `linkedin.com/in/ username` or `linkedin: username`
+  if (!linkedin) {
+    const liMatch = text.match(/linkedin\.com\s*\/\s*in\s*\/\s*([a-zA-Z0-9_-]{3,50})/i);
+    if (liMatch && liMatch[1]) {
+      linkedin = `https://linkedin.com/in/${liMatch[1]}`;
+    }
+  }
+
+  // Also check for GitHub handles written like `@username` or `GitHub: username` or `github.com/ username`
   if (!github) {
-    const ghHandleMatch = text.match(/(?:github(?:\.com)?\s*[:\-\/]\s*@?|@)([a-zA-Z0-9_-]{3,38})/i);
-    if (ghHandleMatch && ghHandleMatch[1] && !["com", "org", "gmail", "email"].includes(ghHandleMatch[1].toLowerCase())) {
-      github = `https://github.com/${ghHandleMatch[1]}`;
+    const ghUrlMatch = text.match(/github\.com\s*\/\s*([a-zA-Z0-9_-]{3,38})/i);
+    if (ghUrlMatch && ghUrlMatch[1] && !["com", "org", "gmail", "email", "in"].includes(ghUrlMatch[1].toLowerCase())) {
+      github = `https://github.com/${ghUrlMatch[1]}`;
+    } else {
+      const ghHandleMatch = text.match(/(?:github\s*[:\-\/]\s*@?|@)([a-zA-Z0-9_-]{3,38})/i);
+      if (ghHandleMatch && ghHandleMatch[1] && !["com", "org", "gmail", "email", "in"].includes(ghHandleMatch[1].toLowerCase())) {
+        github = `https://github.com/${ghHandleMatch[1]}`;
+      }
     }
   }
 

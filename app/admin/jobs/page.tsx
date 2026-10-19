@@ -24,6 +24,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
+
 interface ApplicantItem {
   applicationId: string;
   status: string;
@@ -57,8 +59,8 @@ interface AdminJobItem {
 
 export default function AdminJobsPage() {
   const { notify } = useAdminNotifications();
-  const [jobs, setJobs] = useState<AdminJobItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cacheData, loading, refresh } = useCachedData<{ jobs: AdminJobItem[] }>("/api/admin/jobs");
+  const jobs = cacheData?.jobs || [];
   const [expandedJobs, setExpandedJobs] = useState<Record<string, boolean>>({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -79,24 +81,6 @@ export default function AdminJobsPage() {
     stipendOrSalary: "₹35,000 / month",
   });
 
-  const fetchJobs = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/jobs");
-      if (!res.ok) throw new Error("Failed to load admin jobs");
-      const data = await res.json();
-      setJobs(data.jobs || []);
-    } catch (err: any) {
-      notify("error", "Load Error", err.message || "Failed to load jobs", "ERROR_LOAD");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchJobs();
-  }, []);
-
   const toggleExpand = (jobId: string) => {
     setExpandedJobs((prev) => ({
       ...prev,
@@ -107,7 +91,7 @@ export default function AdminJobsPage() {
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.company || !formData.description || !formData.applyUrl) {
-      notify("error", "Validation Error", "Please fill in all required fields.", "VALIDATION_ERROR");
+      notify("error", "Validation Error", "Please fill in all required fields.");
       return;
     }
 
@@ -124,7 +108,7 @@ export default function AdminJobsPage() {
         throw new Error(errorJson.error || "Failed to create job posting");
       }
 
-      notify("success", "Job Posted", `"${formData.title}" posted successfully.`, "JOB_POSTED");
+      notify("success", "Job Posted", `"${formData.title}" posted successfully.`);
       setShowCreateModal(false);
       setFormData({
         title: "",
@@ -139,9 +123,12 @@ export default function AdminJobsPage() {
         isMSOTInternal: true,
         stipendOrSalary: "₹35,000 / month",
       });
-      fetchJobs();
+      // Invalidate both admin and student caches so both reflect immediately
+      invalidateCache("/api/admin/jobs");
+      invalidateCache("/api/jobs");
+      refresh();
     } catch (err: any) {
-      notify("error", "Creation Failed", err.message, "ERROR_CREATE");
+      notify("error", "Creation Failed", err.message);
     } finally {
       setCreating(false);
     }

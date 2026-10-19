@@ -17,7 +17,6 @@ import {
   FileCode2,
   GraduationCap,
 } from "lucide-react";
-import { AdminNotificationBell } from "./admin-notification-system";
 import { SettingsModal } from "./settings-modal";
 import { MiraiLogo } from "@/components/mirai-logo";
 
@@ -46,7 +45,7 @@ export function Sidebar() {
   };
 
   const links = [
-    { name: "Users", href: "/admin", icon: Users },
+    { name: "Users & Roles", href: "/admin", icon: Users },
     { name: "Campus Job Drives", href: "/admin/jobs", icon: GraduationCap },
     { name: "Interview Roles", href: "/admin/roles", icon: Briefcase },
     { name: "Skills Manager", href: "/admin/skills", icon: Sparkles },
@@ -76,7 +75,6 @@ export function Sidebar() {
             >
               <PanelLeft className="w-4 h-4" />
             </button>
-            <AdminNotificationBell />
           </div>
         ) : (
           <div className="p-4 border-b border-border flex items-center justify-between gap-2">
@@ -90,7 +88,6 @@ export function Sidebar() {
               </span>
             </Link>
             <div className="flex items-center gap-1.5 shrink-0">
-              <AdminNotificationBell />
               <button
                 type="button"
                 onClick={toggleCollapsed}

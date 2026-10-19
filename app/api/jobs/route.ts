@@ -98,14 +98,21 @@ export async function GET() {
       return b.fitPercentage - a.fitPercentage;
     });
 
-    return NextResponse.json({
-      booleanQuery: booleanOutput.query,
-      platformUrls: booleanOutput.externalPlatformUrls,
-      studentTargetRole: targetRole,
-      candidateReadinessScore: readinessScore,
-      totalJobs: rankedJobs.length,
-      jobs: rankedJobs,
-    });
+    return NextResponse.json(
+      {
+        booleanQuery: booleanOutput.query,
+        platformUrls: booleanOutput.externalPlatformUrls,
+        studentTargetRole: targetRole,
+        candidateReadinessScore: readinessScore,
+        totalJobs: rankedJobs.length,
+        jobs: rankedJobs,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("Error in GET /api/jobs:", error);
     return NextResponse.json(

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 
 export async function GET() {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
 import { STANDARD_5_QUESTIONS_TEMPLATE } from "@/lib/default-questions";
 
 export async function GET(req: Request) {
   const { userId } = await auth();
-  const isAdmin = await authorizeAdmin();
-  if (!userId && !isAdmin) {
+  const isStaff = await authorizeStaff();
+  if (!userId && !isStaff) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

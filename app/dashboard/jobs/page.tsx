@@ -19,42 +19,27 @@ import { JobCard, JobItem } from "@/features/jobs/components/job-card";
 import { ApplicationTracker } from "@/features/jobs/components/application-tracker";
 import { Button } from "@/components/ui/button";
 
-export default function JobsPage() {
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<{
-    booleanQuery: string;
-    platformUrls: any;
-    studentTargetRole: string;
-    candidateReadinessScore: number;
-    jobs: JobItem[];
-  } | null>(null);
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
 
+interface JobsData {
+  booleanQuery: string;
+  platformUrls: any;
+  studentTargetRole: string;
+  candidateReadinessScore: number;
+  jobs: JobItem[];
+}
+
+export default function JobsPage() {
+  const { data, loading, error, refresh, mutate } = useCachedData<JobsData>("/api/jobs");
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "msot" | "tracker">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchJobs = async () => {
-    try {
-      const res = await fetch("/api/jobs");
-      if (!res.ok) {
-        throw new Error("Failed to load jobs data");
-      }
-      const json = await res.json();
-      setData(json);
-      setError(null);
-    } catch (err: any) {
-      console.error("Error loading jobs:", err);
-      setError(err.message || "Failed to load jobs");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const handleManualRefresh = async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
   };
-
-  useEffect(() => {
-    fetchJobs();
-  }, []);
 
   const handleUpdateStatus = async (jobId: string, status: string) => {
     try {
@@ -68,15 +53,18 @@ export default function JobsPage() {
         throw new Error("Failed to update status");
       }
 
-      // Update local state smoothly
-      if (data) {
-        setData({
-          ...data,
-          jobs: data.jobs.map((j) =>
+      // Update local state smoothly via cache mutate
+      mutate((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          jobs: prev.jobs.map((j) =>
             j.id === jobId ? { ...j, applicationStatus: status } : j
           ),
-        });
-      }
+        };
+      });
+      invalidateCache("/api/jobs");
+      invalidateCache("/api/admin/jobs");
     } catch (err) {
       console.error("Error updating application status:", err);
     }
@@ -116,14 +104,6 @@ export default function JobsPage() {
         </Link>
         <div className="flex items-center gap-2">
           <Link
-            href="/admin/jobs"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/90 bg-primary/10 hover:bg-primary/20 border border-primary/25 px-2.5 py-1 rounded-md transition-all shadow-xs"
-            title="MSOT Placement Cell Drive Management Portal"
-          >
-            <GraduationCap className="h-3.5 w-3.5" />
-            <span>Staff Portal: Post Drive</span>
-          </Link>
-          <Link
             href="/dashboard/readiness"
             className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 border border-border/60 px-2.5 py-1 rounded-md transition-colors"
           >
@@ -133,10 +113,7 @@ export default function JobsPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              setRefreshing(true);
-              fetchJobs();
-            }}
+            onClick={handleManualRefresh}
             disabled={refreshing}
             className="h-8 w-8 p-0"
           >

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 import { STANDARD_5_QUESTIONS_TEMPLATE } from "@/lib/default-questions";
 
 /**
@@ -8,7 +8,7 @@ import { STANDARD_5_QUESTIONS_TEMPLATE } from "@/lib/default-questions";
  * Lists all configured Job Roles with question count.
  */
 export async function GET() {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -22,7 +22,14 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ roles });
+    return NextResponse.json(
+      { roles },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching job roles:", error);
     return NextResponse.json({ error: "Failed to fetch job roles" }, { status: 500 });
@@ -34,7 +41,7 @@ export async function GET() {
  * Creates a new Job Role.
  */
 export async function POST(req: Request) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

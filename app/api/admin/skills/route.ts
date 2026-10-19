@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 import { INTERVIEWER_SKILLS, REPORT_EVALUATOR_SKILLS } from "@/types/skills";
 
 const BUILT_IN_ADMIN_SKILLS = [
@@ -43,7 +43,7 @@ const BUILT_IN_ADMIN_SKILLS = [
  * Merges built-in skills with custom database skills.
  */
 export async function GET(req: Request) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -78,7 +78,14 @@ export async function GET(req: Request) {
 
     const allSkills = [...customDbSkills, ...combinedBuiltIn];
 
-    return NextResponse.json({ skills: allSkills });
+    return NextResponse.json(
+      { skills: allSkills },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     console.error("Error fetching AI skills:", error);
     return NextResponse.json({ error: "Failed to fetch AI skills" }, { status: 500 });
@@ -90,7 +97,7 @@ export async function GET(req: Request) {
  * Creates a new custom AI Skill (single markdown or folder of markdown files).
  */
 export async function POST(req: Request) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

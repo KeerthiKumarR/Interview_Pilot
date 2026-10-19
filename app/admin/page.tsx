@@ -11,12 +11,16 @@ import {
   Trash2,
   ChevronRight,
   ExternalLink,
-  Award,
-  CheckCircle2,
-  Clock,
-  Code2,
+  ShieldAlert,
+  ShieldCheck,
+  GraduationCap,
   Sparkles,
+  Loader2,
+  Filter,
+  UserCheck,
 } from "lucide-react";
+
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
 
 interface InterviewRecord {
   id: string;
@@ -35,7 +39,7 @@ interface UserItem {
   clerkId: string;
   email: string;
   name: string | null;
-  role: string;
+  role: "student" | "staff" | "admin" | string;
   createdAt: string;
   interviews?: InterviewRecord[];
   _count?: {
@@ -43,33 +47,22 @@ interface UserItem {
   };
 }
 
+interface AdminDataResponse {
+  users: UserItem[];
+  currentUserRole?: "student" | "staff" | "admin";
+}
+
 export default function AdminUsersPage() {
   const { notify } = useAdminNotifications();
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const { data: cacheData, loading: isLoading, error, mutate } = useCachedData<AdminDataResponse>("/api/admin");
+  const users = cacheData?.users || [];
+  const currentUserRole = cacheData?.currentUserRole || "admin";
+  const isSuperAdmin = currentUserRole === "admin";
 
-  useEffect(() => {
-    async function fetchUsers() {
-      try {
-        const res = await fetch("/api/admin");
-        if (!res.ok) {
-          throw new Error("Unauthorized or server error");
-        }
-        const data = await res.json();
-        setUsers(data.users || []);
-        notify("info", "Users Loaded", `Retrieved ${data.users?.length || 0} registered candidates.`, "FETCH_USERS");
-      } catch (err: any) {
-        setError(err.message);
-        notify("error", "Fetch Failed", err.message || "Failed to load users", "ERROR_FETCH_USERS");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchUsers();
-  }, [notify]);
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "admin">("all");
+  const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
 
   const toggleUserExpansion = (userId: string) => {
     setExpandedUsers((prev) => ({
@@ -78,10 +71,41 @@ export default function AdminUsersPage() {
     }));
   };
 
+  const handleUpdateRole = async (userId: string, targetName: string | null, newRole: "student" | "staff" | "admin") => {
+    setUpdatingRoleUserId(userId);
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_role", userId, role: newRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update role");
+
+      mutate((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
+        };
+      });
+      invalidateCache("/api/admin");
+      notify(
+        "success",
+        "Role Updated",
+        `${targetName || "User"} is now assigned as "${newRole.toUpperCase()}".`
+      );
+    } catch (err: any) {
+      notify("error", "Role Update Failed", err.message || "Could not update user role");
+    } finally {
+      setUpdatingRoleUserId(null);
+    }
+  };
+
   const handleDeleteUser = async (userId: string, name: string | null) => {
     if (
       !confirm(
-        `Are you sure you want to completely delete ${name || "this candidate"} and all their interview records? This action is permanent.`
+        `Are you sure you want to completely delete ${name || "this user"} and all their interview records? This action is permanent.`
       )
     ) {
       return;
@@ -93,10 +117,17 @@ export default function AdminUsersPage() {
       });
       if (!res.ok) throw new Error("Failed to delete user");
 
-      setUsers(users.filter((u) => u.id !== userId));
-      notify("success", "User Deleted", `Candidate ${name || userId} has been deleted.`, "DELETE_USER");
+      mutate((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.filter((u) => u.id !== userId),
+        };
+      });
+      invalidateCache("/api/admin");
+      notify("success", "User Deleted", `Candidate ${name || userId} has been deleted.`);
     } catch (err: any) {
-      notify("error", "Deletion Failed", err.message || "Could not delete user", "ERROR_DELETE");
+      notify("error", "Deletion Failed", err.message || "Could not delete user");
     }
   };
 
@@ -115,46 +146,60 @@ export default function AdminUsersPage() {
       });
       if (!res.ok) throw new Error("Failed to delete interview");
 
-      setUsers(
-        users.map((u) => {
-          if (u.id === userId) {
-            const updatedInterviews = (u.interviews || []).filter((i) => i.id !== interviewId);
-            return {
-              ...u,
-              interviews: updatedInterviews,
-              _count: {
-                interviews: Math.max(0, (u._count?.interviews || 1) - 1),
-              },
-            };
-          }
-          return u;
-        })
-      );
-      notify("success", "Interview Removed", `Session "${problemTitle}" deleted.`, "DELETE_INTERVIEW");
+      mutate((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          users: prev.users.map((u) => {
+            if (u.id === userId) {
+              const updatedInterviews = (u.interviews || []).filter((i) => i.id !== interviewId);
+              return {
+                ...u,
+                interviews: updatedInterviews,
+                _count: {
+                  interviews: Math.max(0, (u._count?.interviews || 1) - 1),
+                },
+              };
+            }
+            return u;
+          }),
+        };
+      });
+      invalidateCache("/api/admin");
+      notify("success", "Interview Removed", `Session "${problemTitle}" deleted.`);
     } catch (err: any) {
-      notify("error", "Failed", err.message || "Could not delete interview", "ERROR_DELETE");
+      notify("error", "Failed", err.message || "Could not delete interview");
     }
   };
 
-  // Filter users by search query
+  // Metric counts
+  const studentCount = users.filter((u) => !u.role || u.role === "student").length;
+  const staffCount = users.filter((u) => u.role === "staff").length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
+  const totalInterviews = users.reduce((acc, u) => acc + (u._count?.interviews || 0), 0);
+
+  // Filter users by search query and role filter
   const filteredUsers = users.filter((u) => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    const matchesSearch =
+      !q ||
       (u.name && u.name.toLowerCase().includes(q)) ||
       (u.email && u.email.toLowerCase().includes(q)) ||
-      (u.clerkId && u.clerkId.toLowerCase().includes(q))
-    );
-  });
+      (u.clerkId && u.clerkId.toLowerCase().includes(q));
 
-  const totalInterviews = users.reduce((acc, u) => acc + (u._count?.interviews || 0), 0);
+    if (!matchesSearch) return false;
+
+    if (roleFilter === "all") return true;
+    if (roleFilter === "student") return !u.role || u.role === "student";
+    return u.role === roleFilter;
+  });
 
   if (isLoading) {
     return (
       <div className="flex h-screen bg-background">
         <Sidebar />
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground animate-pulse">Loading Candidates & Users...</p>
+          <p className="text-sm text-muted-foreground animate-pulse">Loading Platform Members & Users...</p>
         </div>
       </div>
     );
@@ -184,56 +229,125 @@ export default function AdminUsersPage() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-                Candidates & Users
+                Users & Roles Management
               </h1>
               <span className="rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                {users.length} Registered
+                {users.length} Total Members
               </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Manage candidate profiles, review completed technical interviews, and inspect score reports.
+              Manage platform roles dynamically across Students, MSOT Staff, and Super Admins.
             </p>
           </div>
         </div>
 
         {/* Analytics Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
           <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Total Candidates
-            </span>
-            <div className="mt-2 text-3xl font-bold text-foreground">{users.length}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Registered on platform</p>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Interviews Conducted
-            </span>
-            <div className="mt-2 text-3xl font-bold text-foreground">{totalInterviews}</div>
-            <p className="mt-1 text-xs text-muted-foreground">Total candidate sessions</p>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Average Sessions
-            </span>
-            <div className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {users.length > 0 ? (totalInterviews / users.length).toFixed(1) : "0"}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Total Registered
+              </span>
+              <Users className="h-4 w-4 text-muted-foreground" />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Interviews per candidate</p>
+            <div className="mt-2 text-3xl font-bold text-foreground">{users.length}</div>
+            <p className="mt-1 text-xs text-muted-foreground">Active database accounts</p>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Students
+              </span>
+              <GraduationCap className="h-4 w-4 text-emerald-500" />
+            </div>
+            <div className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+              {studentCount}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Standard candidates</p>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                MSOT Staff
+              </span>
+              <UserCheck className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+              {staffCount}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Campus drives & evaluators</p>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Super Admins
+              </span>
+              <ShieldCheck className="h-4 w-4 text-amber-500" />
+            </div>
+            <div className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+              {adminCount}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Full system configuration</p>
           </div>
         </div>
 
-        {/* Search Input */}
-        <div className="mb-6 flex items-center justify-between gap-4">
+        {/* Filter Tabs & Search Bar */}
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Role Filter Tabs */}
+          <div className="flex items-center gap-1.5 p-1 rounded-lg border border-border bg-card">
+            <button
+              onClick={() => setRoleFilter("all")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                roleFilter === "all"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              All ({users.length})
+            </button>
+            <button
+              onClick={() => setRoleFilter("student")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                roleFilter === "student"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              Students ({studentCount})
+            </button>
+            <button
+              onClick={() => setRoleFilter("staff")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                roleFilter === "staff"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              Staff ({staffCount})
+            </button>
+            <button
+              onClick={() => setRoleFilter("admin")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                roleFilter === "admin"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              Admins ({adminCount})
+            </button>
+          </div>
+
+          {/* Search Input */}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search candidate by name, email, or Clerk ID..."
+              placeholder="Search user by name, email, or Clerk ID..."
               className="w-full rounded-lg border border-input bg-card pl-9 pr-4 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring shadow-xs"
             />
           </div>
@@ -244,15 +358,16 @@ export default function AdminUsersPage() {
           {filteredUsers.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground">
               <Users className="mx-auto h-8 w-8 opacity-40 mb-2" />
-              <p className="text-sm font-medium text-foreground">No candidates match your search</p>
-              <p className="text-xs text-muted-foreground mt-1">Try searching by a different name or email.</p>
+              <p className="text-sm font-medium text-foreground">No users match your criteria</p>
+              <p className="text-xs text-muted-foreground mt-1">Try switching tabs or searching with a different term.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-border bg-secondary/50 font-semibold text-muted-foreground uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="px-5 py-3.5">Candidate</th>
+                    <th className="px-5 py-3.5">Candidate / User</th>
+                    <th className="px-5 py-3.5">Assigned Role</th>
                     <th className="px-5 py-3.5">Registered</th>
                     <th className="px-5 py-3.5 text-center">Interviews</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
@@ -262,10 +377,13 @@ export default function AdminUsersPage() {
                   {filteredUsers.map((user) => {
                     const isExpanded = !!expandedUsers[user.id];
                     const interviews = user.interviews || [];
+                    const isUpdating = updatingRoleUserId === user.id;
+                    const effectiveRole = user.role || "student";
 
                     return (
                       <React.Fragment key={user.id}>
                         <tr className="transition-colors hover:bg-secondary/30">
+                          {/* User info */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <button
@@ -291,32 +409,86 @@ export default function AdminUsersPage() {
                             </div>
                           </td>
 
+                          {/* Role Management Column */}
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              {/* Visual Badge */}
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${
+                                  effectiveRole === "admin"
+                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                                    : effectiveRole === "staff"
+                                    ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                                    : "bg-secondary text-muted-foreground border-border"
+                                }`}
+                              >
+                                {effectiveRole === "admin" && <ShieldCheck className="h-3 w-3" />}
+                                {effectiveRole === "staff" && <GraduationCap className="h-3 w-3" />}
+                                {effectiveRole === "student" && <Users className="h-3 w-3" />}
+                                <span className="capitalize">{effectiveRole}</span>
+                              </span>
+
+                              {/* Interactive Role Selector for Super Admins */}
+                              {isSuperAdmin && (
+                                <div className="relative inline-flex items-center">
+                                  {isUpdating ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <select
+                                      value={effectiveRole}
+                                      onChange={(e) =>
+                                        handleUpdateRole(
+                                          user.id,
+                                          user.name,
+                                          e.target.value as "student" | "staff" | "admin"
+                                        )
+                                      }
+                                      className="rounded-md border border-input bg-card px-2 py-0.5 text-[11px] font-medium text-foreground hover:border-primary/50 focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer transition-colors shadow-2xs"
+                                      title="Change user permissions"
+                                    >
+                                      <option value="student">Student</option>
+                                      <option value="staff">Staff</option>
+                                      <option value="admin">Admin</option>
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Registration date */}
                           <td className="px-5 py-4 text-muted-foreground">
                             {format(new Date(user.createdAt), "MMM d, yyyy")}
                           </td>
 
+                          {/* Total Interviews */}
                           <td className="px-5 py-4 text-center">
                             <span className="inline-flex items-center justify-center rounded-full bg-secondary px-2.5 py-0.5 font-mono text-xs font-bold text-foreground">
                               {user._count?.interviews || 0}
                             </span>
                           </td>
 
+                          {/* Actions */}
                           <td className="px-5 py-4 text-right">
-                            <button
-                              onClick={() => handleDeleteUser(user.id, user.name)}
-                              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                              title="Delete candidate account"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Delete</span>
-                            </button>
+                            {isSuperAdmin ? (
+                              <button
+                                onClick={() => handleDeleteUser(user.id, user.name)}
+                                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                title="Delete user account"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            ) : (
+                              <span className="text-muted-foreground text-[11px] italic">Read-only</span>
+                            )}
                           </td>
                         </tr>
 
                         {/* Expandable Interview Session History */}
                         {isExpanded && (
                           <tr className="bg-secondary/20">
-                            <td colSpan={4} className="p-4 sm:p-6">
+                            <td colSpan={5} className="p-4 sm:p-6">
                               <div className="ml-4 pl-4 border-l-2 border-primary/30 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -326,7 +498,7 @@ export default function AdminUsersPage() {
 
                                 {interviews.length === 0 ? (
                                   <p className="text-xs text-muted-foreground italic">
-                                    This candidate has not started any interview sessions yet.
+                                    This user has not started any interview sessions yet.
                                   </p>
                                 ) : (
                                   <div className="space-y-2">
@@ -379,19 +551,21 @@ export default function AdminUsersPage() {
                                             <ExternalLink className="h-3 w-3" />
                                           </Link>
 
-                                          <button
-                                            onClick={() =>
-                                              handleDeleteInterview(
-                                                user.id,
-                                                interview.id,
-                                                interview.problemTitle
-                                              )
-                                            }
-                                            className="rounded-md p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                                            title="Delete interview session"
-                                          >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                          </button>
+                                          {isSuperAdmin && (
+                                            <button
+                                              onClick={() =>
+                                                handleDeleteInterview(
+                                                  user.id,
+                                                  interview.id,
+                                                  interview.problemTitle
+                                                )
+                                              }
+                                              className="rounded-md p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                              title="Delete interview session"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
                                     ))}

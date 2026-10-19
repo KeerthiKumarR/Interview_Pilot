@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeStaff } from "@/lib/admin-auth";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -10,7 +10,7 @@ interface RouteContext {
  * GET /api/admin/roles/[id]
  */
 export async function GET(req: Request, context: RouteContext) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,7 +44,7 @@ export async function GET(req: Request, context: RouteContext) {
  * PATCH /api/admin/roles/[id]
  */
 export async function PATCH(req: Request, context: RouteContext) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -105,7 +105,7 @@ export async function PATCH(req: Request, context: RouteContext) {
  * DELETE /api/admin/roles/[id]
  */
 export async function DELETE(req: Request, context: RouteContext) {
-  if (!(await authorizeAdmin())) {
+  if (!(await authorizeStaff())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { authorizeAdmin } from "@/lib/admin-auth";
+import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
 import { Badge } from "@/components/ui/badge";
 import { MiraiLogo } from "@/components/mirai-logo";
 
@@ -21,6 +21,7 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
+  const isStaff = await authorizeStaff();
   const isAdmin = await authorizeAdmin();
 
   return (
@@ -70,12 +71,20 @@ export default async function DashboardLayout({
             >
               5. Jobs & Drives
             </Link>
-            {isAdmin && (
+            {isStaff && (
               <Link
                 href="/admin/jobs"
                 className="text-primary font-semibold hover:underline transition-colors"
               >
                 MSOT Staff Board
+              </Link>
+            )}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-amber-600 dark:text-amber-400 font-semibold hover:underline transition-colors"
+              >
+                Admin
               </Link>
             )}
           </nav>

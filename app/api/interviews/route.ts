@@ -2,6 +2,7 @@ import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { CODING_PROBLEMS } from "@/data/problems";
+import { getVivaStarterCode } from "@/lib/interview/starter-code";
 
 /**
  * POST /api/interviews
@@ -141,44 +142,7 @@ ${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
 - Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.`;
 
       const projectRef = projectTitle || "Application";
-      if (language === "python") {
-        starterCode = `# ──────────────────────────────────────────────
-# ${roleName} Viva Scratchpad
-# Language: Python
-# ──────────────────────────────────────────────
-# Use this scratchpad when the interviewer asks you to write or optimize
-# an API route, helper function, or data transformation.
-
-def handle_request(request_data: dict) -> dict:
-    """
-    Example handler for processing ${projectRef} requests.
-    """
-    # Write your implementation here when requested
-    return {"status": "ok", "project": "${projectRef}"}
-`;
-      } else {
-        starterCode = `// ──────────────────────────────────────────────
-// ${roleName} Viva Scratchpad
-// Language: JavaScript / TypeScript ${stackList ? `(${stackList})` : ""}
-// ──────────────────────────────────────────────
-// Use this scratchpad when the interviewer asks you to write or optimize
-// an API endpoint, middleware, or system component for ${projectRef}.
-
-/**
- * API handler for ${projectRef}
- * @param {object} req - Incoming request payload
- * @param {object} res - Response stream
- */
-export async function handleProjectRequest(req, res) {
-  // Write your implementation here when requested by the interviewer
-  return {
-    success: true,
-    project: "${projectRef}",
-    timestamp: Date.now(),
-  };
-}
-`;
-      }
+      starterCode = getVivaStarterCode(language, roleName, projectRef, stackList || "Core Stack & Architecture");
     } else if (style !== "dsa") {
       // Placement Viva anchored to target role and tech stack for candidates who haven't uploaded resume yet
       const isBehavioral = style === "service";
@@ -247,43 +211,7 @@ export async function handleProjectRequest(req, res) {
 - Use the code editor on the right if the interviewer asks you to draft an API route, middleware, or optimize a data structure.
 > *Tip: To personalize future vivas around your exact personal projects and GitHub repos, upload your resume in the **Profile** tab!*`;
 
-      if (language === "python") {
-        starterCode = `# ──────────────────────────────────────────────
-# ${roleName} Placement Viva Scratchpad
-# Language: Python | Stack: ${stackSkills}
-# ──────────────────────────────────────────────
-# Use this scratchpad when the interviewer asks you to write or optimize
-# an API route, helper function, or data transformation.
-
-def handle_request(request_data: dict) -> dict:
-    """
-    Example handler for processing requests.
-    """
-    return {"status": "ok", "role": "${roleName}"}
-`;
-      } else {
-        starterCode = `// ──────────────────────────────────────────────
-// ${roleName} Placement Viva Scratchpad
-// Language: JavaScript / TypeScript | Stack: ${stackSkills}
-// ──────────────────────────────────────────────
-// Use this scratchpad when the interviewer asks you to write or optimize
-// an API endpoint, middleware, or system component.
-
-/**
- * API handler for ${roleName} Viva
- * @param {object} req - Incoming request payload
- * @param {object} res - Response stream
- */
-export async function handleRequest(req, res) {
-  // Write your implementation here when requested by the interviewer
-  return {
-    success: true,
-    role: "${roleName}",
-    timestamp: Date.now(),
-  };
-}
-`;
-      }
+      starterCode = getVivaStarterCode(language, roleName, "System Architecture", stackSkills);
     } else {
       // Fallback to random coding problem ONLY if user explicitly requested DSA algorithmic track
       let matchingProblems = CODING_PROBLEMS.filter(

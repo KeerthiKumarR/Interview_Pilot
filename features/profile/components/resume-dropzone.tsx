@@ -206,6 +206,32 @@ export function ResumeDropzone({
       }
     }
 
+    if (!linkedin) {
+      const liMatch = text.match(/linkedin\.com\s*\/\s*in\s*\/\s*([a-zA-Z0-9_-]{3,50})/i);
+      if (liMatch && liMatch[1]) {
+        linkedin = `https://linkedin.com/in/${liMatch[1]}`;
+      }
+    }
+
+    if (!github) {
+      const ghUrlMatch = text.match(/github\.com\s*\/\s*([a-zA-Z0-9_-]{3,38})/i);
+      if (ghUrlMatch && ghUrlMatch[1] && !["com", "org", "gmail", "email", "in"].includes(ghUrlMatch[1].toLowerCase())) {
+        github = `https://github.com/${ghUrlMatch[1]}`;
+      } else {
+        const ghHandleMatch = text.match(/(?:github\s*[:\-\/]\s*@?|@)([a-zA-Z0-9_-]{3,38})/i);
+        if (ghHandleMatch && ghHandleMatch[1] && !["com", "org", "gmail", "email", "in"].includes(ghHandleMatch[1].toLowerCase())) {
+          github = `https://github.com/${ghHandleMatch[1]}`;
+        }
+      }
+    }
+
+    if (!leetcode) {
+      const lcHandleMatch = text.match(/leetcode(?:\.com)?\s*[:\-\/]\s*@?([a-zA-Z0-9_-]{3,38})/i);
+      if (lcHandleMatch && lcHandleMatch[1]) {
+        leetcode = `https://leetcode.com/${lcHandleMatch[1]}`;
+      }
+    }
+
     return {
       text: text.trim(),
       pageCount,
