@@ -95,7 +95,16 @@ export async function readSSEStream(
     } else {
       onDone(""); // Support empty responses just in case
     }
-  } catch (err) {
+  } catch (err: any) {
+    if (
+      err?.name === "AbortError" ||
+      err?.code === 20 ||
+      String(err?.message || "").toLowerCase().includes("abort") ||
+      String(err?.message || "").toLowerCase().includes("canceled")
+    ) {
+      // Stream intentionally aborted / canceled - exit gracefully
+      return;
+    }
     onError(err instanceof Error ? err : new Error("Stream read error"));
   }
 }

@@ -53,7 +53,12 @@ export function useChatStream(options: UseChatStreamOptions) {
 
       // Cleanup on unmount
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+        try {
+          abortControllerRef.current.abort("unmount");
+        } catch {
+          // ignore if already aborted
+        }
+        abortControllerRef.current = null;
       }
       clearTimeout(timeoutIdRef.current);
     };
@@ -131,12 +136,18 @@ export function useChatStream(options: UseChatStreamOptions) {
 
       const handleNetworkError = async (err: any, msgIdToUpdate?: string) => {
         clearTimeout(timeoutIdRef.current);
-        if (!isMountedRef.current) return;
 
-        // User aborted intentionally -> do not reconnect
-        if (err instanceof DOMException && err.name === "AbortError") {
+        const isAbort =
+          err?.name === "AbortError" ||
+          err?.code === 20 ||
+          (typeof DOMException !== "undefined" && err instanceof DOMException && err.name === "AbortError") ||
+          String(err?.message || "").toLowerCase().includes("abort") ||
+          String(err?.message || "").toLowerCase().includes("canceled") ||
+          Boolean(abortControllerRef.current?.signal.aborted);
+
+        // Intentional abort or component unmounted -> reset state gracefully without logging error
+        if (isAbort || !isMountedRef.current) {
           forceRecovery();
-          options.onError?.(err);
           return;
         }
 
@@ -298,7 +309,11 @@ export function useChatStream(options: UseChatStreamOptions) {
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      try {
+        abortControllerRef.current.abort("stop_generation");
+      } catch {
+        // ignore
+      }
       abortControllerRef.current = null;
     }
     clearTimeout(timeoutIdRef.current);

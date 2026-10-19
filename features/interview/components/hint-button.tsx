@@ -113,8 +113,16 @@ export function HintButton() {
           setAIState("idle");
         },
         // onError
-        (err) => {
+        (err: any) => {
           clearTimeout(timeoutId);
+          if (
+            err?.name === "AbortError" ||
+            err?.code === 20 ||
+            String(err?.message || "").toLowerCase().includes("abort")
+          ) {
+            setAIState("idle");
+            return;
+          }
           console.error("Hint stream error:", err);
           const errMsg = isTimeout
             ? "We encountered an error. Please try again."
@@ -129,8 +137,16 @@ export function HintButton() {
           setAIState("idle");
         }
       );
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(timeoutId);
+      if (
+        err?.name === "AbortError" ||
+        err?.code === 20 ||
+        String(err?.message || "").toLowerCase().includes("abort")
+      ) {
+        setAIState("idle");
+        return;
+      }
       const errMsg = isTimeout
         ? "We encountered an error. Please try again."
         : "I'd suggest thinking about what data structure would help you solve this efficiently. Consider the time complexity requirements.";
