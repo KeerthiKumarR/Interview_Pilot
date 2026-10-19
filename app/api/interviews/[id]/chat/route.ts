@@ -30,6 +30,47 @@ type CachedStudentProfile = Prisma.StudentProfileGetPayload<{
 // In-memory 60s TTL cache for candidate profile context to eliminate redundant DB joins during active interview viva
 const profileSessionCache = new Map<string, { profile: CachedStudentProfile; expiry: number }>();
 
+// In-memory 60s TTL cache for interview system settings to eliminate 200-300ms of DB roundtrips per turn
+let cachedChatSettings: {
+  interviewMode: string | null;
+  interviewerSkill: string | null;
+  targetSkills: string | null;
+  timestamp: number;
+} | null = null;
+
+async function getCachedChatSettings() {
+  const now = Date.now();
+  if (cachedChatSettings && now - cachedChatSettings.timestamp < 60000) {
+    return cachedChatSettings;
+  }
+  try {
+    const settings = await prisma.systemSetting.findMany({
+      where: {
+        key: { in: ["INTERVIEW_MODE", "DYNAMIC_INTERVIEWER_SKILL", "DYNAMIC_TARGET_SKILLS"] },
+      },
+    });
+    const map = new Map(settings.map((s) => [s.key, s.value]));
+    cachedChatSettings = {
+      interviewMode: map.get("INTERVIEW_MODE") || null,
+      interviewerSkill: map.get("DYNAMIC_INTERVIEWER_SKILL") || null,
+      targetSkills: map.get("DYNAMIC_TARGET_SKILLS") || null,
+      timestamp: now,
+    };
+  } catch (e) {
+    console.warn("Settings cache fetch error:", e);
+    return {
+      interviewMode: null,
+      interviewerSkill: null,
+      targetSkills: null,
+      timestamp: now,
+    };
+  }
+  return cachedChatSettings;
+}
+
+// In-memory 120s TTL cache for custom AI skills
+const aiSkillCache = new Map<string, { content: string; expiry: number }>();
+
 /**
  * POST /api/interviews/[id]/chat
  * Unified chat route: validates user, saves user message, streams AI response,
@@ -63,32 +104,30 @@ export async function POST(req: Request, context: RouteContext) {
       });
     }
 
-    // Verify user and interview
-    const user = await prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
-    });
-
-    if (!user) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const interview = await prisma.interview.findUnique({
-      where: { id, userId: user.id },
-      include: {
-        messages: {
-          orderBy: { createdAt: "asc" },
-          select: { role: true, content: true },
+    // 🚀 ULTRA-LOW LATENCY: Run interview query, hint count, and settings in parallel!
+    const [interview, dbHintCount, settingsData] = await Promise.all([
+      prisma.interview.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, clerkId: true } },
+          messages: {
+            orderBy: { createdAt: "asc" },
+            select: { role: true, content: true },
+          },
+          jobRole: true,
         },
-        jobRole: true,
-      },
-    });
+      }),
+      prisma.eventLog.count({
+        where: {
+          interviewId: id,
+          eventType: "HINT_REQUESTED",
+        },
+      }),
+      getCachedChatSettings(),
+    ]);
 
-    if (!interview) {
-      return new Response(JSON.stringify({ error: "Interview not found" }), {
+    if (!interview || interview.user.clerkId !== clerkId) {
+      return new Response(JSON.stringify({ error: "Interview not found or unauthorized" }), {
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
@@ -101,53 +140,46 @@ export async function POST(req: Request, context: RouteContext) {
       });
     }
 
-    // Save user message to DB
-    await prisma.message.create({
+    // 🚀 ULTRA-LOW LATENCY: Persist user message asynchronously in background
+    // (Does not block SSE stream connection from immediately starting to LLM!)
+    prisma.message.create({
       data: {
         interviewId: id,
         role: "user",
         content: message,
       },
-    });
+    }).catch((err) => console.error("Async user message save error:", err));
 
-    // Authoritative backend data loading directly from database (not from frontend chat payload)
+    // Authoritative backend data loading directly from database
     const dbTabSwitch = interview.tabSwitchCount ?? 0;
     const dbOutOfFrame = interview.outOfFrameCount ?? 0;
     const dbMultiplePeople = interview.multiplePeopleCount ?? 0;
 
-    const dbHintCount = await prisma.eventLog.count({
-      where: {
-        interviewId: id,
-        eventType: "HINT_REQUESTED",
-      },
-    });
-
     // Check interview mode (Dynamic vs Hybrid)
-    const modeSetting = await prisma.systemSetting.findUnique({
-      where: { key: "INTERVIEW_MODE" },
-    });
-    const isDynamicMode = interview.jobRole?.mode === "dynamic" || modeSetting?.value === "dynamic";
+    const isDynamicMode = interview.jobRole?.mode === "dynamic" || settingsData.interviewMode === "dynamic";
 
     let dynamicInterviewerPrompt = "";
     if (isDynamicMode) {
-      const [interviewerSkillSetting, targetSkillsSetting] = await Promise.all([
-        prisma.systemSetting.findUnique({ where: { key: "DYNAMIC_INTERVIEWER_SKILL" } }),
-        prisma.systemSetting.findUnique({ where: { key: "DYNAMIC_TARGET_SKILLS" } }),
-      ]);
-      const activeSkillKey = interview.jobRole?.interviewerSkill || interviewerSkillSetting?.value || "startup_pragmatist";
+      const activeSkillKey = interview.jobRole?.interviewerSkill || settingsData.interviewerSkill || "startup_pragmatist";
       
-      // Check database for custom AI Skill first, otherwise fallback to code registry
-      const customDbSkill = await prisma.aiSkill.findFirst({
-        where: { slug: activeSkillKey, isActive: true },
-      });
+      let skillContent = "";
+      const cachedSkill = aiSkillCache.get(activeSkillKey);
+      if (cachedSkill && cachedSkill.expiry > Date.now()) {
+        skillContent = cachedSkill.content;
+      } else {
+        const customDbSkill = await prisma.aiSkill.findFirst({
+          where: { slug: activeSkillKey, isActive: true },
+        });
+        skillContent = customDbSkill?.content || getInterviewerSkill(activeSkillKey).promptInstructions;
+        aiSkillCache.set(activeSkillKey, { content: skillContent, expiry: Date.now() + 120000 });
+      }
 
-      const skillPromptText = customDbSkill?.content || getInterviewerSkill(activeSkillKey).promptInstructions;
       const targetSkills =
         interview.jobRole?.targetSkills ||
-        targetSkillsSetting?.value ||
+        settingsData.targetSkills ||
         "System Architecture, Big-O Complexity, Code Modularity, Ambition & Ownership";
 
-      dynamicInterviewerPrompt = `\n\n${skillPromptText}\n\nEVALUATION TARGET SKILLS FOR THIS SESSION:\n${targetSkills}\n\n${buildDynamicToolInstructions()}`;
+      dynamicInterviewerPrompt = `\n\n${skillContent}\n\nEVALUATION TARGET SKILLS FOR THIS SESSION:\n${targetSkills}\n\n${buildDynamicToolInstructions()}`;
     }
 
     const isViva =
@@ -181,18 +213,18 @@ export async function POST(req: Request, context: RouteContext) {
     const now = Date.now();
     let studentProfile: CachedStudentProfile = null;
 
-    const cachedProfileEntry = profileSessionCache.get(user.id);
+    const cachedProfileEntry = profileSessionCache.get(interview.user.id);
     if (cachedProfileEntry && cachedProfileEntry.expiry > now) {
       studentProfile = cachedProfileEntry.profile;
     } else {
       studentProfile = await prisma.studentProfile.findUnique({
-        where: { userId: user.id },
+        where: { userId: interview.user.id },
         include: {
           projects: { orderBy: { order: "asc" } },
           achievements: true,
         },
       });
-      profileSessionCache.set(user.id, { profile: studentProfile, expiry: now + 60000 });
+      profileSessionCache.set(interview.user.id, { profile: studentProfile, expiry: now + 60000 });
     }
 
     const profileDirective = buildProfileInterviewDirective(studentProfile ? {

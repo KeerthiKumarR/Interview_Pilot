@@ -455,7 +455,7 @@ export function useTTS(): UseTTSResult {
         const candidateSentence = sentenceMatch[1].trim();
         // Avoid splitting on common abbreviations or decimal numbers
         const isAbbrev = /(?:e\.g|i\.e|vs|etc|Dr|Mr|Ms|\d+\.\d+)$/i.test(candidateSentence);
-        if (!isAbbrev && candidateSentence.length >= 12) {
+        if (!isAbbrev && candidateSentence.length >= 6) {
           ttsQueueRef.current.push(candidateSentence);
           sentenceBufferRef.current = buf.slice(sentenceMatch[0].length);
           speakNextInQueue();

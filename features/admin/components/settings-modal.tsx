@@ -36,6 +36,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [reportProvider, setReportProvider] = useState("gemini");
   const [reportModel, setReportModel] = useState("gemini-2.5-flash");
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [groqApiKey, setGroqApiKey] = useState("");
+  const [nvidiaApiKey, setNvidiaApiKey] = useState("");
   const [zaiApiKey, setZaiApiKey] = useState("");
   const [openrouterApiKey, setOpenrouterApiKey] = useState("");
   const [deepseekApiKey, setDeepseekApiKey] = useState("");
@@ -59,6 +61,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           if (s.REPORT_AI_PROVIDER) setReportProvider(s.REPORT_AI_PROVIDER);
           if (s.REPORT_AI_MODEL) setReportModel(s.REPORT_AI_MODEL);
           if (s.GEMINI_API_KEY) setGeminiApiKey(s.GEMINI_API_KEY);
+          if (s.GROQ_API_KEY) setGroqApiKey(s.GROQ_API_KEY);
+          if (s.NVIDIA_API_KEY) setNvidiaApiKey(s.NVIDIA_API_KEY);
           if (s.ZAI_API_KEY) setZaiApiKey(s.ZAI_API_KEY);
           if (s.OPENROUTER_API_KEY) setOpenrouterApiKey(s.OPENROUTER_API_KEY);
           if (s.DEEPSEEK_API_KEY) setDeepseekApiKey(s.DEEPSEEK_API_KEY);
@@ -126,6 +130,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           reportProvider,
           reportModel,
           geminiApiKey,
+          groqApiKey,
+          nvidiaApiKey,
           zaiApiKey,
           openrouterApiKey,
           deepseekApiKey,
@@ -294,6 +300,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           onChange={(e) => setProvider(e.target.value)}
                           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-ring"
                         >
+                          <option value="groq">Groq LPU (Ultra-Low Latency ~500 tok/s)</option>
+                          <option value="nvidia">NVIDIA NIM / build.nvidia.com (TensorRT-LLM)</option>
                           <option value="gemini">Google Gemini (Default)</option>
                           <option value="zai">Z.AI (GLM-4 / BigModel)</option>
                           <option value="openrouter">OpenRouter (Multi-model)</option>
@@ -307,7 +315,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                           type="text"
                           value={model}
                           onChange={(e) => setModel(e.target.value)}
-                          placeholder="e.g. gemini-2.5-flash or glm-4"
+                          placeholder="e.g. qwen/qwen3.8-27b or meta/llama-3.1-8b-instruct"
                           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                       </div>
@@ -336,6 +344,28 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       </h4>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-foreground">Groq API Key (Ultra-Fast LPU)</label>
+                          <input
+                            type="password"
+                            value={groqApiKey}
+                            onChange={(e) => setGroqApiKey(e.target.value)}
+                            placeholder="gsk_..."
+                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-foreground">NVIDIA NIM API Key (build.nvidia.com)</label>
+                          <input
+                            type="password"
+                            value={nvidiaApiKey}
+                            onChange={(e) => setNvidiaApiKey(e.target.value)}
+                            placeholder="nvapi-..."
+                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+
                         <div className="space-y-1">
                           <div className="flex items-center justify-between">
                             <label className="text-xs font-medium text-foreground">Google Gemini API Key</label>

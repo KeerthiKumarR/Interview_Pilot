@@ -197,11 +197,19 @@ export function InterviewStageShell({
         if (silenceTimeoutRef.current) {
           clearTimeout(silenceTimeoutRef.current);
         }
-        // Give candidate 3.0 seconds of natural breathing/thinking pause before auto-sending
+        // Adaptive silence pause:
+        // If the candidate completed a sentence (ends with . ? ! or clear stop signal), wait only 1.4s!
+        // If it's a mid-sentence pause or breath without terminal punctuation, give 2.8s breathing room!
+        const trimmed = combined.trim();
+        const isSentenceComplete =
+          /[.?!]$/.test(trimmed) ||
+          /\b(that's all|that's it|i am done|i'm done|thank you|what do you think)\b$/i.test(trimmed);
+        const pauseDelay = isSentenceComplete ? 1400 : 2800;
+
         silenceTimeoutRef.current = setTimeout(() => {
           setIsAutoSending(true);
           finalizeAndSendSpeech();
-        }, 3000);
+        }, pauseDelay);
       }
     },
   });
@@ -262,6 +270,27 @@ export function InterviewStageShell({
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // 🚀 ULTRA-LOW LATENCY: Press Enter anytime to instantly send speech with 0ms delay!
+  useEffect(() => {
+    if (!isLiveVoiceMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+        const isMonaco = document.activeElement?.classList?.contains("inputarea");
+        if (activeTag === "input" || activeTag === "textarea" || isMonaco) return;
+
+        if (speechAccumulatorRef.current || liveSpeech || liveInterim) {
+          e.preventDefault();
+          finalizeAndSendSpeech();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isLiveVoiceMode, liveSpeech, liveInterim, finalizeAndSendSpeech]);
 
   const handleToggleCamera = () => {
     if (cameraStream) {
@@ -1006,9 +1035,10 @@ export function InterviewStageShell({
                         <button
                           type="button"
                           onClick={finalizeAndSendSpeech}
-                          className="px-2 py-0.5 rounded-md bg-primary text-primary-foreground text-[10px] font-semibold hover:opacity-90 transition cursor-pointer shadow-xs"
+                          className="px-2 py-0.5 rounded-md bg-primary text-primary-foreground text-[10px] font-semibold hover:opacity-90 transition cursor-pointer shadow-xs flex items-center gap-1"
                         >
-                          Send Now
+                          <span>Send Now</span>
+                          <kbd className="text-[9px] bg-primary-foreground/20 px-1 py-0.2 rounded">↵</kbd>
                         </button>
                       )}
                     </div>
@@ -1024,7 +1054,7 @@ export function InterviewStageShell({
                       <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2 space-y-1">
                         <Sparkles className="h-4 w-4 text-primary animate-pulse" />
                         <p className="text-xs font-medium text-foreground">Listening to your voice...</p>
-                        <p className="text-[10px]">Speak your answer naturally. Pausing for 3.0s auto-submits, or click Send Now.</p>
+                        <p className="text-[10px]">Speak naturally. Adaptive silence auto-submits, or hit Enter ↵ / Send Now.</p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2">

@@ -27,11 +27,12 @@ export function invalidateProviderConfigCache() {
 
 async function fetchProviderConfigFromDb() {
   // Default fallbacks from environment
-  let activeProvider = process.env.DEFAULT_AI_PROVIDER || (process.env.GROQ_API_KEY ? "groq" : process.env.OPENROUTER_API_KEY ? "openrouter" : "gemini");
-  let activeModel = process.env.DEFAULT_AI_MODEL || (activeProvider === "groq" ? "qwen/qwen3.8-27b" : process.env.OPENROUTER_MODEL || (activeProvider === "openrouter" ? "inclusionai/ling-3.0-flash-sante:free" : "gemini-2.5-flash"));
+  let activeProvider = process.env.DEFAULT_AI_PROVIDER || (process.env.GROQ_API_KEY ? "groq" : process.env.NVIDIA_API_KEY ? "nvidia" : process.env.OPENROUTER_API_KEY ? "openrouter" : "gemini");
+  let activeModel = process.env.DEFAULT_AI_MODEL || (activeProvider === "groq" ? "qwen/qwen3.8-27b" : activeProvider === "nvidia" ? "meta/llama-3.1-8b-instruct" : process.env.OPENROUTER_MODEL || (activeProvider === "openrouter" ? "inclusionai/ling-3.0-flash-sante:free" : "gemini-2.5-flash"));
   let reportProvider = process.env.REPORT_AI_PROVIDER || activeProvider;
   let reportModel = process.env.REPORT_AI_MODEL || (reportProvider === "groq" ? "openai/gpt-oss-120b" : activeModel);
   let groqKey = process.env.GROQ_API_KEY || "";
+  let nvidiaKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
   let geminiKey = process.env.GEMINI_API_KEY || "";
   let zaiKey = process.env.ZAI_API_KEY || "511ba8c060534cd2b50e8e78170d4ed2.6hEKr2c10VeIHk3c";
   let openrouterKey = process.env.OPENROUTER_API_KEY || "";
@@ -43,6 +44,7 @@ async function fetchProviderConfigFromDb() {
         key: {
           in: [
             "GROQ_API_KEY",
+            "NVIDIA_API_KEY",
             "DEFAULT_AI_PROVIDER",
             "DEFAULT_AI_MODEL",
             "REPORT_AI_PROVIDER",
@@ -60,6 +62,9 @@ async function fetchProviderConfigFromDb() {
 
     const gKey = settingsMap.get("GROQ_API_KEY");
     if (gKey) groqKey = gKey;
+
+    const nKey = settingsMap.get("NVIDIA_API_KEY");
+    if (nKey) nvidiaKey = nKey;
 
     const pSetting = settingsMap.get("DEFAULT_AI_PROVIDER");
     if (pSetting) activeProvider = pSetting;
@@ -99,6 +104,11 @@ async function fetchProviderConfigFromDb() {
       key: groqKey,
       url: process.env.GROQ_API_URL || "https://api.groq.com/openai/v1",
       model: process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
+    },
+    nvidia: {
+      key: nvidiaKey,
+      url: process.env.NVIDIA_API_URL || "https://integrate.api.nvidia.com/v1",
+      model: process.env.NVIDIA_MODEL || "meta/llama-3.1-8b-instruct",
     },
     gemini: {
       key: geminiKey,
@@ -207,6 +217,9 @@ export async function deepseekChat(
   if (activeProviderToUse === "groq") {
     url = config.groq.url;
     key = config.groq.key;
+  } else if (activeProviderToUse === "nvidia") {
+    url = config.nvidia.url;
+    key = config.nvidia.key;
   } else if (activeProviderToUse === "openrouter") {
     url = config.openrouter.url;
     key = config.openrouter.key;
@@ -239,6 +252,13 @@ export async function deepseekChat(
         return await makeRequest(config.openrouter.url, config.openrouter.key, "nvidia/nemotron-3.5-lightning:free", true, messages, options, 90000);
       } catch (orErr) {
         console.error("OpenRouter free model fallback failed:", orErr);
+      }
+    }
+    if (config.nvidia.key && activeProviderToUse !== "nvidia") {
+      try {
+        return await makeRequest(config.nvidia.url, config.nvidia.key, "meta/llama-3.1-8b-instruct", false, messages, options, 90000);
+      } catch (nvErr) {
+        console.error("NVIDIA NIM fallback also failed:", nvErr);
       }
     }
     if (activeProviderToUse !== "zai" && config.zai.key) {
@@ -299,6 +319,9 @@ export async function deepseekChatStream(
   if (config.activeProvider === "groq") {
     primaryUrl = config.groq.url;
     primaryKey = config.groq.key;
+  } else if (config.activeProvider === "nvidia") {
+    primaryUrl = config.nvidia.url;
+    primaryKey = config.nvidia.key;
   } else if (config.activeProvider === "openrouter") {
     primaryUrl = config.openrouter.url;
     primaryKey = config.openrouter.key;
@@ -326,11 +349,19 @@ export async function deepseekChatStream(
     });
   }
 
-  // Add Groq backup if not already primary
+  // Add Groq backup if not already primary (ultra-low latency ~500 tok/s)
   if (config.groq.key && config.activeProvider !== "groq") {
     failoverChain.push(
       { model: "qwen/qwen3.8-27b", provider: "groq", url: config.groq.url, key: config.groq.key },
       { model: "openai/gpt-oss-120b", provider: "groq", url: config.groq.url, key: config.groq.key }
+    );
+  }
+
+  // Add NVIDIA NIM backup if key configured (build.nvidia.com)
+  if (config.nvidia.key && config.activeProvider !== "nvidia") {
+    failoverChain.push(
+      { model: "meta/llama-3.1-8b-instruct", provider: "nvidia", url: config.nvidia.url, key: config.nvidia.key },
+      { model: "nvidia/llama-3.1-nemotron-70b-instruct", provider: "nvidia", url: config.nvidia.url, key: config.nvidia.key }
     );
   }
 
@@ -393,7 +424,7 @@ export async function deepseekChatStream(
           model: candidate.model,
           messages,
           temperature: options?.temperature ?? 0.7,
-          max_tokens: options?.maxTokens ?? 2560,
+          max_tokens: options?.maxTokens ?? 512,
           stream: true,
           ...(isOpenRouter && { include_reasoning: true }),
         }),

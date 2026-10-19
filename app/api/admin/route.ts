@@ -219,6 +219,24 @@ export async function POST(req: Request) {
       if (zaiApiKey) process.env.ZAI_API_KEY = zaiApiKey;
     }
 
+    if (body.groqApiKey !== undefined) {
+      await prisma.systemSetting.upsert({
+        where: { key: "GROQ_API_KEY" },
+        update: { value: body.groqApiKey },
+        create: { key: "GROQ_API_KEY", value: body.groqApiKey },
+      });
+      if (body.groqApiKey) process.env.GROQ_API_KEY = body.groqApiKey;
+    }
+
+    if (body.nvidiaApiKey !== undefined) {
+      await prisma.systemSetting.upsert({
+        where: { key: "NVIDIA_API_KEY" },
+        update: { value: body.nvidiaApiKey },
+        create: { key: "NVIDIA_API_KEY", value: body.nvidiaApiKey },
+      });
+      if (body.nvidiaApiKey) process.env.NVIDIA_API_KEY = body.nvidiaApiKey;
+    }
+
     if (body.openrouterApiKey !== undefined) {
       await prisma.systemSetting.upsert({
         where: { key: "OPENROUTER_API_KEY" },
