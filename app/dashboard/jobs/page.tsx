@@ -116,6 +116,14 @@ export default function JobsPage() {
         </Link>
         <div className="flex items-center gap-2">
           <Link
+            href="/admin/jobs"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/90 bg-primary/10 hover:bg-primary/20 border border-primary/25 px-2.5 py-1 rounded-md transition-all shadow-xs"
+            title="MSOT Placement Cell Drive Management Portal"
+          >
+            <GraduationCap className="h-3.5 w-3.5" />
+            <span>Staff Portal: Post Drive</span>
+          </Link>
+          <Link
             href="/dashboard/readiness"
             className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-muted/60 border border-border/60 px-2.5 py-1 rounded-md transition-colors"
           >
