@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// AlgoPilot — Auth Feature Barrel Export
+// Mirai Copilot — Auth Feature Barrel Export
 // ──────────────────────────────────────────────
 // Components and hooks for authentication will be added in Phase 2.
 

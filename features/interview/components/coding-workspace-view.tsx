@@ -4,7 +4,6 @@ import React, { useState, useMemo } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { CodeEditor } from "@/features/editor/components/code-editor";
-import { WhiteboardCanvas } from "@/features/interview/components/whiteboard-canvas";
 import { CODING_PROBLEMS } from "@/data/problems";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -49,7 +48,7 @@ export function CodingWorkspaceView({
   const difficulty = useInterviewStore((s) => s.difficulty);
   const currentQuestion = useInterviewStore((s) => s.currentQuestion);
 
-  const [activeProblemTab, setActiveProblemTab] = useState<"problem" | "whiteboard" | "examples" | "constraints" | "hints">("problem");
+  const [activeProblemTab, setActiveProblemTab] = useState<"problem" | "examples" | "constraints" | "hints">("problem");
   const [activeTestTab, setActiveTestTab] = useState<"cases" | "output">("output");
   const [selectedCaseIndex, setSelectedCaseIndex] = useState(0);
 
@@ -363,22 +362,6 @@ export function CodingWorkspaceView({
             <>
               <button
                 type="button"
-                onClick={() => setActiveProblemTab("whiteboard")}
-                className={`pb-1 transition cursor-pointer relative flex items-center gap-1.5 ${
-                  activeProblemTab === "whiteboard"
-                    ? "text-foreground font-bold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <PenTool className="h-3 w-3" />
-                <span>Architecture Whiteboard</span>
-                {activeProblemTab === "whiteboard" && (
-                  <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
-                )}
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setActiveProblemTab("hints")}
                 className={`pb-1 transition cursor-pointer relative flex items-center gap-1.5 ${
                   activeProblemTab === "hints"
@@ -628,13 +611,6 @@ export function CodingWorkspaceView({
           </div>
         )}
 
-        {/* Tab: Architecture Whiteboard */}
-        {activeProblemTab === "whiteboard" && (
-          <div className="flex-1 flex flex-col h-[520px] rounded-xl overflow-hidden border border-border bg-card">
-            <WhiteboardCanvas />
-          </div>
-        )}
-
         {/* Tab 2: Full Examples */}
         {activeProblemTab === "examples" && (
           <div className="space-y-3">
@@ -705,8 +681,8 @@ export function CodingWorkspaceView({
                 <div className="pt-2 border-t border-border/40">
                   <h6 className="font-semibold text-foreground mb-1">Candidate Pro-Tips:</h6>
                   <ul className="space-y-1 text-[11px]">
-                    <li>• Speak aloud as you formulate ideas; Ananya listens actively to your train of thought.</li>
-                    <li>• Use the <strong>Architecture Whiteboard</strong> tab to draw schemas or data flows when explaining system architecture.</li>
+                    <li>• Speak aloud as you formulate ideas; the AI interviewer listens actively to your train of thought.</li>
+                    <li>• Structure your technical answers clearly around trade-offs, caching, latency, and failure modes.</li>
                     <li>• Feel free to ask clarifying questions before answering complex architecture prompts.</li>
                   </ul>
                 </div>

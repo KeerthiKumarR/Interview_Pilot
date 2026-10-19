@@ -1,9 +1,9 @@
 #!/bin/bash
 # ──────────────────────────────────────────────
-# AlgoPilot — Server Runner Script
+# Mirai Copilot — Server Runner Script
 # ──────────────────────────────────────────────
 
-echo "🚀 Starting AlgoPilot Startup Sequence..."
+echo "🚀 Starting Mirai Copilot Startup Sequence..."
 
 # 1. Check if env file exists and load it
 if [ ! -f .env.local ]; then

@@ -635,8 +635,8 @@ export function InterviewClient({
       console.warn("Failed to save code on submit:", e);
     }
 
-    // 2. Submit code to AI interviewer for evaluation & feedback
-    await handleSendMessage("I have finished and submitted my implementation. Please review my code and provide your feedback.");
+    // 2. Submit code to AI interviewer for evaluation & feedback without ending the session
+    await handleSendMessage("I have updated and submitted my code in the editor. Please review my implementation and let's continue with the next technical and architecture questions.");
   }, [interview.id, handleSendMessage]);
 
   const handleStopGeneration = useCallback(() => {

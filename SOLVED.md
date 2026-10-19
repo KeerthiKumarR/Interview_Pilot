@@ -1,6 +1,6 @@
-# Detailed Problems & Solutions: AlgoPilot Implementation
+# Detailed Problems & Solutions: Mirai Copilot Implementation
 
-This document provides a comprehensive log of the technical problems encountered during development/deployment of the **AlgoPilot** AI Coding Interview Platform on Vercel, along with their solutions.
+This document provides a comprehensive log of the technical problems encountered during development/deployment of the **Mirai Copilot** AI Coding Interview Platform on Vercel, along with their solutions.
 
 ---
 

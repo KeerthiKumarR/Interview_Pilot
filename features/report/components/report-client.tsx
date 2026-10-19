@@ -691,157 +691,98 @@ export function ReportClient({
             </div>
           )}
 
-          {/* Transcript Annotations */}
-          {messages.length > 0 && (
+          {/* Final Submitted Code Implementation */}
+          {interview.code && interview.code.trim().length > 0 && (
             <div className="mt-6 border-t border-border pt-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold">
-                  Annotated Interview Transcript
-                </h2>
-                <button
-                  onClick={() => setShowCode(!showCode)}
-                  className="text-xs font-medium text-primary hover:underline cursor-pointer flex items-center gap-1"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="16 18 22 12 16 6" />
-                    <polyline points="8 6 2 12 8 18" />
-                  </svg>
-                  {showCode ? "Hide Submitted Code" : "View Submitted Code"}
-                </button>
-              </div>
-
-              {showCode ? (
-                <div className="rounded-xl border border-border bg-slate-50 dark:bg-[#121318] p-4 h-[520px] overflow-y-auto font-mono text-xs shadow-xs">
-                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-border text-muted-foreground text-[11px]">
-                    <span className="flex items-center gap-2 font-medium text-foreground">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                      Final Submitted Code ({interview.language})
-                    </span>
-                    <span className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-                      Hover/click line badges for AI code analysis
-                    </span>
-                  </div>
-                  {(!interview.code || interview.code.trim().length === 0) ? (
-                    <div className="text-muted-foreground italic p-4 text-center">
-                      No code was submitted during this interview session.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1">
-                      {interview.code.split("\n").map((lineText, lineIdx) => {
-                        const lineNum = lineIdx + 1;
-                        const trimmed = lineText.trim();
-                        
-                        // Intelligent code line annotations mapping
-                        let badge: { type: "info" | "warning" | "success" | "perf"; label: string; detail: string } | null = null;
-
-                        if (lineNum === 1 || trimmed.startsWith("function") || trimmed.startsWith("def") || trimmed.startsWith("public") || trimmed.startsWith("class")) {
-                          badge = {
-                            type: "info",
-                            label: "Signature",
-                            detail: `Function signature & entry point. Overall Code Quality: ${report.codeQualityScore}/100.`,
-                          };
-                        } else if (trimmed.startsWith("for") || trimmed.startsWith("while") || trimmed.includes("recurse")) {
-                          badge = {
-                            type: "perf",
-                            label: `Time ${report.timeComplexity || "O(N)"}`,
-                            detail: `Primary loop iteration. Computed Time Complexity: ${report.timeComplexity || "O(N)"}.`,
-                          };
-                        } else if (trimmed.includes("new ") || trimmed.includes("[]") || trimmed.includes("Map(") || trimmed.includes("Set(") || trimmed.includes("dict(")) {
-                          badge = {
-                            type: "success",
-                            label: `Space ${report.spaceComplexity || "O(1)"}`,
-                            detail: `Data structure allocation. Computed Space Complexity: ${report.spaceComplexity || "O(1)"}.`,
-                          };
-                        } else if (trimmed.startsWith("if") && (trimmed.includes("null") || trimmed.includes("==") || trimmed.includes("<="))) {
-                          badge = {
-                            type: "warning",
-                            label: "Edge Case",
-                            detail: report.weaknesses?.[0] || "Boundary and validation check.",
-                          };
-                        }
-
-                        return (
-                          <div
-                            key={lineIdx}
-                            className="group flex items-center gap-3 px-2 py-1 rounded hover:bg-slate-200/60 dark:hover:bg-white/5 transition-colors"
-                          >
-                            <span className="w-8 select-none text-right text-slate-400 dark:text-zinc-500 text-[11px] shrink-0 font-mono">
-                              {lineNum}
-                            </span>
-                            <code className="flex-1 text-slate-900 dark:text-slate-100 whitespace-pre font-mono text-[12.5px] leading-relaxed font-medium">
-                              {lineText || " "}
-                            </code>
-                            {badge && (
-                              <div
-                                className={`shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-sans font-semibold cursor-help transition-all shadow-xs ${
-                                  badge.type === "perf"
-                                    ? "bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/40 group-hover:bg-purple-200/80"
-                                    : badge.type === "warning"
-                                    ? "bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 group-hover:bg-amber-200/80"
-                                    : badge.type === "success"
-                                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 group-hover:bg-emerald-200/80"
-                                    : "bg-blue-100 text-blue-900 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40 group-hover:bg-blue-200/80"
-                                }`}
-                                title={`${badge.label}: ${badge.detail}`}
-                              >
-                                <span>{badge.label}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                <div className="space-y-0.5">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Final Submitted Code Implementation
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Language: <span className="font-mono text-foreground font-medium">{interview.language}</span>
+                  </p>
                 </div>
-              ) : (
-                <div className="flex flex-col gap-4 rounded-xl border border-border p-4 bg-muted/20 h-[500px] overflow-y-auto">
-                  {messages.map((msg, i) => {
-                  const annotation = report.transcriptAnnotations?.find(
-                    (a) => a.messageIndex === i
-                  );
-                  const isAssistant = msg.role === "assistant";
-
-                  return (
-                    <div
-                      key={i}
-                      className={`flex flex-col max-w-[88%] ${
-                        isAssistant ? "self-start" : "self-end"
-                      }`}
-                    >
-                      <div
-                        className={`rounded-2xl px-4.5 py-3 text-sm shadow-xs ${
-                          isAssistant
-                            ? "bg-blue-50/70 border border-blue-200/60 text-slate-900 dark:bg-slate-900/90 dark:border-transparent dark:text-slate-100"
-                            : "bg-emerald-50/70 border border-emerald-200/60 text-emerald-950 dark:bg-emerald-950/75 dark:border-transparent dark:text-emerald-50 font-medium"
-                        }`}
-                      >
-                        <span
-                          className={`text-xs font-semibold tracking-wide uppercase block mb-1 ${
-                            isAssistant ? "text-blue-700 dark:text-blue-400" : "text-emerald-700 dark:text-emerald-400 text-right"
-                          }`}
-                        >
-                          {isAssistant ? "Interviewer" : "You"}
-                        </span>
-                        <MessageContent content={msg.content} isUser={!isAssistant} />
-                      </div>
-                      {annotation && (
-                        <div className="mt-2 flex items-start gap-2.5 text-xs p-3 rounded-xl border border-amber-300/90 bg-amber-50 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-200 w-full shadow-xs">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-amber-700 dark:text-amber-400">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="12" />
-                            <line x1="12" y1="16" x2="12.01" y2="16" />
-                          </svg>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-amber-900 dark:text-amber-300 tracking-wide text-xs">{annotation.tag}</span>
-                            <span className="text-amber-950 dark:text-amber-100/90 leading-relaxed text-[11.5px] mt-0.5 font-medium">{annotation.rationale}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                <span className="text-[11px] text-muted-foreground">
+                  Overall Quality Score: <strong className="text-foreground">{report.codeQualityScore || 0}/100</strong>
+                </span>
               </div>
-              )}
+
+              <div className="rounded-xl border border-border bg-slate-50 dark:bg-[#121318] p-4 max-h-[520px] overflow-y-auto font-mono text-xs shadow-xs">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-border text-muted-foreground text-[11px]">
+                  <span className="flex items-center gap-2 font-medium text-foreground">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                    Verified Implementation Snapshot
+                  </span>
+                  <span className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
+                    Hover line badges for algorithmic analysis
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {interview.code.split("\n").map((lineText, lineIdx) => {
+                    const lineNum = lineIdx + 1;
+                    const trimmed = lineText.trim();
+                    
+                    let badge: { type: "info" | "warning" | "success" | "perf"; label: string; detail: string } | null = null;
+
+                    if (lineNum === 1 || trimmed.startsWith("function") || trimmed.startsWith("def") || trimmed.startsWith("public") || trimmed.startsWith("class") || trimmed.startsWith("export")) {
+                      badge = {
+                        type: "info",
+                        label: "Signature",
+                        detail: `Handler signature & entry point. Overall Code Quality: ${report.codeQualityScore}/100.`,
+                      };
+                    } else if (trimmed.startsWith("for") || trimmed.startsWith("while") || trimmed.includes("Promise.all")) {
+                      badge = {
+                        type: "perf",
+                        label: `Time ${report.timeComplexity || "O(N)"}`,
+                        detail: `Concurrent query execution. Time Complexity: ${report.timeComplexity || "O(N)"}.`,
+                      };
+                    } else if (trimmed.includes("new ") || trimmed.includes("[]") || trimmed.includes("Map(") || trimmed.includes("Set(") || trimmed.includes("lean(")) {
+                      badge = {
+                        type: "success",
+                        label: `Space ${report.spaceComplexity || "O(1)"}`,
+                        detail: `Memory allocation & lean query optimization. Space Complexity: ${report.spaceComplexity || "O(1)"}.`,
+                      };
+                    } else if (trimmed.startsWith("if") && (trimmed.includes("null") || trimmed.includes("==") || trimmed.includes("<="))) {
+                      badge = {
+                        type: "warning",
+                        label: "Edge Case",
+                        detail: report.weaknesses?.[0] || "Boundary and validation check.",
+                      };
+                    }
+
+                    return (
+                      <div
+                        key={lineIdx}
+                        className="group flex items-center gap-3 px-2 py-1 rounded hover:bg-slate-200/60 dark:hover:bg-white/5 transition-colors"
+                      >
+                        <span className="w-8 select-none text-right text-slate-400 dark:text-zinc-500 text-[11px] shrink-0 font-mono">
+                          {lineNum}
+                        </span>
+                        <code className="flex-1 text-slate-900 dark:text-slate-100 whitespace-pre font-mono text-[12.5px] leading-relaxed font-medium">
+                          {lineText || " "}
+                        </code>
+                        {badge && (
+                          <div
+                            className={`shrink-0 flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-sans font-semibold cursor-help transition-all shadow-xs ${
+                              badge.type === "perf"
+                                ? "bg-purple-100 text-purple-800 border border-purple-200 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/40 group-hover:bg-purple-200/80"
+                                : badge.type === "warning"
+                                ? "bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 group-hover:bg-amber-200/80"
+                                : badge.type === "success"
+                                ? "bg-emerald-100 text-emerald-900 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 group-hover:bg-emerald-200/80"
+                                : "bg-blue-100 text-blue-900 border border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40 group-hover:bg-blue-200/80"
+                            }`}
+                            title={`${badge.label}: ${badge.detail}`}
+                          >
+                            <span>{badge.label}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// AlgoPilot — Shared TypeScript Types
+// Mirai Copilot — Shared TypeScript Types
 // ──────────────────────────────────────────────
 
 // ─── Enums ───────────────────────────────────

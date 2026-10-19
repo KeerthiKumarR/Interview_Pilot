@@ -17,7 +17,7 @@ export interface TranscriptMessage {
 
 // ─── Layout Persistence ──────────────────────
 
-const LAYOUT_STORAGE_KEY = "algopilot_layout_prefs";
+const LAYOUT_STORAGE_KEY = "mirai_layout_prefs";
 
 interface LayoutPrefs {
   layoutMode: LayoutMode;

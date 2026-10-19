@@ -68,7 +68,7 @@ export async function auditGithub(
   const cleanUser = username.trim().replace(/^@/, "");
   const headers: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
-    "User-Agent": "AlgoPilot-Placement-Auditor",
+    "User-Agent": "MiraiCopilot-Placement-Auditor",
   };
 
   // If user provided a personal token in environment, use it to bypass 60 req/hr limits

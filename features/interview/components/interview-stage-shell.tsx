@@ -119,7 +119,6 @@ export function InterviewStageShell({
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPipExpanded, setIsPipExpanded] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
   const [inputText, setInputText] = useState("");
   const [isSpeechListening, setIsSpeechListening] = useState(false);
@@ -145,7 +144,25 @@ export function InterviewStageShell({
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
     }
-    const fullTranscript = (speechAccumulatorRef.current + " " + liveInterim).trim();
+    const currentAccum = speechAccumulatorRef.current.trim();
+    const interim = liveInterim.trim();
+    let combined = currentAccum;
+    if (interim && !currentAccum.toLowerCase().endsWith(interim.toLowerCase())) {
+      combined = currentAccum ? `${currentAccum} ${interim}` : interim;
+    }
+
+    // Deduplicate repeated sentences e.g. "I don't know man I don't know man"
+    const words = combined.split(/\s+/);
+    if (words.length >= 4 && words.length % 2 === 0) {
+      const half = words.length / 2;
+      const firstHalf = words.slice(0, half).join(" ");
+      const secondHalf = words.slice(half).join(" ");
+      if (firstHalf.toLowerCase() === secondHalf.toLowerCase()) {
+        combined = firstHalf;
+      }
+    }
+
+    const fullTranscript = combined.trim();
     if (!fullTranscript || fullTranscript.length < 2) {
       setLiveSpeech("");
       setLiveInterim("");
@@ -154,7 +171,7 @@ export function InterviewStageShell({
       return;
     }
 
-    // Stop microphone temporarily while Ananya processes and speaks
+    // Stop microphone temporarily while the AI processes and speaks
     stopListeningRef.current();
     setIsSpeechListening(false);
     setIsAutoSending(false);
@@ -183,9 +200,18 @@ export function InterviewStageShell({
     },
     onResult: (transcript) => {
       if (aiState === "speaking" || aiState === "thinking") return;
-      const combined = speechAccumulatorRef.current
-        ? `${speechAccumulatorRef.current} ${transcript}`
-        : transcript;
+      const prev = speechAccumulatorRef.current.trim();
+      const curr = transcript.trim();
+      let combined = curr;
+      if (prev) {
+        if (prev.toLowerCase() === curr.toLowerCase() || prev.toLowerCase().endsWith(curr.toLowerCase())) {
+          combined = prev;
+        } else if (curr.toLowerCase().startsWith(prev.toLowerCase())) {
+          combined = curr;
+        } else {
+          combined = `${prev} ${curr}`;
+        }
+      }
       speechAccumulatorRef.current = combined;
       setLiveSpeech(combined);
       setLiveInterim("");
@@ -748,16 +774,6 @@ export function InterviewStageShell({
           {/* Global Theme Toggle */}
           <ThemeToggle />
 
-          {/* Settings Button */}
-          <button
-            type="button"
-            onClick={() => setShowSettingsModal(true)}
-            aria-label="Interview Settings"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition cursor-pointer"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
-
           {/* End Interview Button */}
           <button
             type="button"
@@ -1003,7 +1019,12 @@ export function InterviewStageShell({
                     <span>Live Spoken Subtitle</span>
                   </div>
                   <p className="text-xs leading-relaxed text-foreground font-normal">
-                    {latestAssistantMsg?.content || `${interviewerName} is ready to conduct your placement viva.`}
+                    {latestAssistantMsg?.content
+                      ? latestAssistantMsg.content
+                          .replace(/\[STAGE:\s*[1-4]\]/gi, "")
+                          .replace(/\[SWITCH_CATEGORY:\s*[^\]]+\]/gi, "")
+                          .trim()
+                      : `${interviewerName} is ready to conduct your placement viva.`}
                   </p>
                 </div>
               </div>
@@ -1293,59 +1314,6 @@ export function InterviewStageShell({
           </div>
         </aside>
       </main>
-
-      {/* ─── SETTINGS MODAL ─────────────────────────────────────────── */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl text-foreground">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <Settings className="h-4 w-4 text-foreground" />
-                <h3 className="font-semibold text-foreground text-sm">Session Settings</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSettingsModal(false)}
-                className="text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 py-4 text-xs">
-              {/* Theme Appearance Row */}
-              <div className="flex items-center justify-between rounded-xl border border-border bg-secondary/30 p-3">
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-foreground text-xs block">Theme Appearance</span>
-                  <p className="text-[11px] text-muted-foreground">Toggle between Bright and Dark mode</p>
-                </div>
-                <ThemeToggle showLabel />
-              </div>
-
-              <div className="space-y-1">
-                <span className="font-semibold text-foreground">Microphone</span>
-                <p className="text-muted-foreground">Status: {isMicMuted ? "Muted" : "Active"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="font-semibold text-foreground">Camera Preview</span>
-                <p className="text-muted-foreground">Status: {isCameraOff ? "Disabled" : "Active & Streaming"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="font-semibold text-foreground">AI Voice Engine</span>
-                <p className="text-muted-foreground">Kokoro Ultra-Fast TTS</p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowSettingsModal(false)}
-              className="w-full rounded-lg bg-foreground py-2 text-xs font-semibold text-background hover:opacity-90 transition cursor-pointer"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ─── END INTERVIEW CONFIRMATION MODAL ───────────────────────── */}
       {showEndModal && (

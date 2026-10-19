@@ -74,33 +74,36 @@ function createMockQuery(sampleData: unknown) {
   return q;
 }
 
-const sampleMovies = [
-  { _id: "60c72b2f9b1d8b001c8e4d2a", title: "Inception", genre: "Sci-Fi", releaseYear: 2010, rating: 8.8, posterUrl: "https://example.com/poster1.jpg" },
-  { _id: "60c72b2f9b1d8b001c8e4d2b", title: "Interstellar", genre: "Sci-Fi", releaseYear: 2014, rating: 8.7, posterUrl: "https://example.com/poster2.jpg" },
-  { _id: "60c72b2f9b1d8b001c8e4d2c", title: "The Dark Knight", genre: "Action", releaseYear: 2008, rating: 9.0, posterUrl: "https://example.com/poster3.jpg" },
-];
+function createGenericMockData(name: string) {
+  return [
+    { _id: "60c72b2f9b1d8b001c8e4d2a", id: 1, title: `${name} Item 1`, name: `${name} Item 1`, status: "active", createdAt: new Date().toISOString() },
+    { _id: "60c72b2f9b1d8b001c8e4d2b", id: 2, title: `${name} Item 2`, name: `${name} Item 2`, status: "active", createdAt: new Date().toISOString() },
+    { _id: "60c72b2f9b1d8b001c8e4d2c", id: 3, title: `${name} Item 3`, name: `${name} Item 3`, status: "active", createdAt: new Date().toISOString() },
+  ];
+}
 
 function createModelMock(name: string) {
+  const records = createGenericMockData(name);
   return {
     modelName: name,
-    find: () => createMockQuery(sampleMovies),
-    findOne: () => createMockQuery(sampleMovies[0]),
-    findById: () => createMockQuery(sampleMovies[0]),
-    findByIdAndUpdate: () => createMockQuery(sampleMovies[0]),
-    findByIdAndDelete: () => createMockQuery(sampleMovies[0]),
-    findOneAndUpdate: () => createMockQuery(sampleMovies[0]),
-    findOneAndDelete: () => createMockQuery(sampleMovies[0]),
-    countDocuments: async () => sampleMovies.length,
-    count: async () => sampleMovies.length,
-    estimatedDocumentCount: async () => sampleMovies.length,
-    create: async (data: Record<string, unknown>) => ({ _id: "60c72b2f9b1d8b001c8e4d2d", ...data }),
+    find: () => createMockQuery(records),
+    findOne: () => createMockQuery(records[0]),
+    findById: () => createMockQuery(records[0]),
+    findByIdAndUpdate: () => createMockQuery(records[0]),
+    findByIdAndDelete: () => createMockQuery(records[0]),
+    findOneAndUpdate: () => createMockQuery(records[0]),
+    findOneAndDelete: () => createMockQuery(records[0]),
+    countDocuments: async () => records.length,
+    count: async () => records.length,
+    estimatedDocumentCount: async () => records.length,
+    create: async (data: Record<string, unknown>) => ({ _id: "mock_new_id_101", ...data }),
     insertMany: async (data: Record<string, unknown>[]) => data,
     updateOne: async () => ({ acknowledged: true, modifiedCount: 1 }),
     updateMany: async () => ({ acknowledged: true, modifiedCount: 1 }),
     deleteOne: async () => ({ acknowledged: true, deletedCount: 1 }),
     deleteMany: async () => ({ acknowledged: true, deletedCount: 1 }),
-    aggregate: async () => sampleMovies,
-    distinct: async () => ["Sci-Fi", "Action", "Drama"],
+    aggregate: async () => records,
+    distinct: async () => ["Category A", "Category B"],
   };
 }
 
@@ -174,6 +177,19 @@ async function executeNodeSandbox(sourceCode: string): Promise<ExecutionCacheRes
     error: (...args: unknown[]) => errors.push(args.map(formatArg).join(" ")),
   };
 
+  // Security guard against sandbox escape and prototype constructor exploits
+  if (/(process\.mainModule|process\.binding|\bconstructor\s*(\.constructor|\[\s*["']constructor["']\s*\])\s*\()/i.test(sourceCode)) {
+    return {
+      stdout: "",
+      stderr: "Security Violation: Access to system constructors and internal bindings is restricted in sandbox.",
+      compileOutput: null,
+      statusDescription: "Runtime Error",
+      statusId: 11,
+      time: "0.000s",
+      memory: null,
+    };
+  }
+
   // Strip module import/export keywords and basic TypeScript type annotations for VM evaluation
   let executableCode = sourceCode
     .replace(/^\s*import\s+.*?from\s+['"].*?['"];?/gm, "")
@@ -189,12 +205,12 @@ async function executeNodeSandbox(sourceCode: string): Promise<ExecutionCacheRes
 __sandboxPromise__ = (async () => {
   try {
     const mockReq = {
-      query: { genre: "Sci-Fi", page: "1", limit: "10", search: "" },
-      params: { id: "60c72b2f9b1d8b001c8e4d2a", movieId: "60c72b2f9b1d8b001c8e4d2a" },
-      body: { title: "Movie adda", genre: "Sci-Fi", rating: 8.8 },
+      query: { page: "1", limit: "10", search: "", sort: "desc", category: "all", genre: "All" },
+      params: { id: "60c72b2f9b1d8b001c8e4d2a", itemId: "60c72b2f9b1d8b001c8e4d2a", movieId: "60c72b2f9b1d8b001c8e4d2a" },
+      body: { name: "Sample Resource", title: "Sample Title", status: "active", data: {} },
       headers: { authorization: "Bearer mock_jwt_token", "content-type": "application/json" },
       method: "GET",
-      url: "/api/movies?page=1&limit=10"
+      url: "/api/resource?page=1&limit=10"
     };
     let responseCaptured = false;
     const mockRes = {
@@ -233,7 +249,7 @@ __sandboxPromise__ = (async () => {
 `;
   }
 
-  const sandbox: Record<string, unknown> = {
+  const baseSandbox: Record<string, unknown> = {
     console: customConsole,
     setTimeout,
     clearTimeout,
@@ -253,24 +269,31 @@ __sandboxPromise__ = (async () => {
     Map,
     Set,
     process: { env: { NODE_ENV: "development", PORT: 3000 } },
-    Movie: createModelMock("Movie"),
-    User: createModelMock("User"),
-    Product: createModelMock("Product"),
-    Order: createModelMock("Order"),
-    Item: createModelMock("Item"),
-    movies: sampleMovies,
     mockRedis,
     redis: mockRedis,
     redisClient: mockRedis,
     mongoose: mockMongoose,
-    cacheKey: "movie:60c72b2f9b1d8b001c8e4d2a",
-    movieId: "60c72b2f9b1d8b001c8e4d2a",
+    cacheKey: "cache:key:1",
+    id: "60c72b2f9b1d8b001c8e4d2a",
     require: mockRequire,
     exports: {},
     module: { exports: {} },
     modelProxy,
     __sandboxPromise__: null,
   };
+
+  const sandbox = new Proxy(baseSandbox, {
+    has(target, prop) {
+      if (typeof prop === "string" && /^[A-Z]/.test(prop)) return true;
+      return prop in target;
+    },
+    get(target, prop) {
+      if (typeof prop === "string" && /^[A-Z]/.test(prop) && !(prop in target)) {
+        return createModelMock(prop);
+      }
+      return (target as any)[prop];
+    },
+  });
 
   const context = vm.createContext(sandbox);
   const startTime = Date.now();

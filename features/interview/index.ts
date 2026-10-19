@@ -1,7 +1,3 @@
-// ──────────────────────────────────────────────
-// AlgoPilot — Interview Feature Barrel Export
-// ──────────────────────────────────────────────
-
 // Store
 export { useInterviewStore } from "./store/interview-store";
 

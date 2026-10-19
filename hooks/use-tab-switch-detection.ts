@@ -24,7 +24,7 @@ export function useTabSwitchDetection({
   interviewId,
   initialCount = 0,
 }: UseTabSwitchDetectionOptions): TabSwitchState & { dismissWarning: () => void } {
-  const storageKey = interviewId ? `algopilot_tab_switches_${interviewId}` : null;
+  const storageKey = interviewId ? `mirai_tab_switches_${interviewId}` : null;
 
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(() => {
     if (typeof window !== "undefined" && storageKey) {
@@ -115,7 +115,7 @@ export function useTabSwitchDetection({
     }
 
     // Detect refresh: mark in sessionStorage before unload, check on mount
-    const refreshKey = interviewId ? `algopilot_active_${interviewId}` : "algopilot_interview_active";
+    const refreshKey = interviewId ? `mirai_active_${interviewId}` : "mirai_interview_active";
     const wasRefresh = sessionStorage.getItem(refreshKey) === "true";
     if (wasRefresh) {
       incrementAndPersistCount("Please do not refresh the page during the interview");

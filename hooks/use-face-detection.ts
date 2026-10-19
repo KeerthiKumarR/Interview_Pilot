@@ -36,7 +36,7 @@ export function useFaceDetection({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   stopCamera: () => void;
 } {
-  const storageKey = interviewId ? `algopilot_out_of_frame_seconds_${interviewId}` : null;
+  const storageKey = interviewId ? `mirai_out_of_frame_seconds_${interviewId}` : null;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);

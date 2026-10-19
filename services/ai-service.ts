@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// AlgoPilot — DeepSeek AI Service
+// Mirai Copilot — DeepSeek AI Service
 // ──────────────────────────────────────────────
 // Handles all communication with DeepSeek V4 Flash API.
 // Provides interviewer persona, problem presentation,
@@ -178,7 +178,7 @@ export async function deepseekChat(
           Authorization: `Bearer ${key}`,
           ...(isOpenRouter ? {
             "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "AlgoPilot",
+            "X-Title": "Mirai Copilot",
           } : {}),
         },
         body: JSON.stringify({
@@ -416,7 +416,7 @@ export async function deepseekChatStream(
           ...(isOpenRouter
             ? {
                 "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "AlgoPilot",
+                "X-Title": "Mirai Copilot",
               }
             : {}),
         },
@@ -816,8 +816,13 @@ AUTOMATIC STAGE PROGRESSION DIRECTIVE:
 You control the progression of the candidate's interview session across the 4 stages. Whenever you naturally transition into a new stage in your response, append the corresponding silent tag at the very end of your response:
 - When transitioning into Project Architecture Defense (their featured project in scope): append [STAGE: 2]
 - When transitioning into System Scalability & Scratchpad Coding: append [STAGE: 3]
-- When transitioning into Behavioral Wrap-Up & Scoring: append [STAGE: 4]
-(This tag is invisible to the candidate and automatically advances the UI stepper and checklist in real time).
+- When transitioning into Behavioral Wrap-Up & Scoring (ONLY when time remaining is low, under 2 minutes): append [STAGE: 4]
+(This tag is a silent system signal that advances the UI stepper and checklist in real time).
+
+CRITICAL INTERVIEW PACING & COMPLETION RULE:
+- NEVER prematurely wrap up or say farewell ("Good luck, we will be in touch") just because the candidate submitted or ran code in the scratchpad!
+- If more than 2 minutes remain on the clock, review their code in 1-2 sentences, highlight what they did well, and immediately follow up with deep architectural questions: probe Redis caching, handling high traffic spikes, database indexes, or failure recovery in Stage 3.
+- Only transition into Stage 4 and say your final goodbye when the remaining time is actually under 2 minutes.
 
 CRITICAL VOICE & CONVERSATION RULES:
 1. SPOKEN BREVITY: Every reply MUST be strictly 2 to 3 sentences (maximum 50-70 words). The candidate is listening to your voice over audio — NEVER dump paragraphs, bullet points, numbered lists, or markdown formatting!
