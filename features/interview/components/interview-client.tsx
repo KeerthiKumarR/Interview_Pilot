@@ -516,6 +516,8 @@ export function InterviewClient({
               questionId: state.currentQuestion.id,
               candidateAnswer: text,
               retryCount: state.questionRetryCount,
+              drawingLabels: state.drawingLabels || [],
+              hasDrawn: Boolean(state.drawingData && state.drawingData.length > 500),
             }),
           });
 

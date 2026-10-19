@@ -44,6 +44,13 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
 
   const setDrawingData = useInterviewStore((s) => s.setDrawingData);
+  const drawingLabels = useInterviewStore((s) => s.drawingLabels);
+  const setDrawingLabels = useInterviewStore((s) => s.setDrawingLabels);
+
+  // Text Tool Floating Input state
+  const [textInputPos, setTextInputPos] = useState<{ x: number; y: number } | null>(null);
+  const [textInputValue, setTextInputValue] = useState<string>("");
+  const textInputRef = useRef<HTMLInputElement | null>(null);
 
   // Theme-aware colors
   const bgColor = isLight ? "#f8fafc" : "#0c0d12";
@@ -246,6 +253,10 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
         ctx.fill();
       }
     }
+    setDrawingLabels([]);
+    setDrawingData(null);
+    setTextInputPos(null);
+    setTextInputValue("");
     saveHistory();
   };
 
@@ -256,6 +267,34 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
     if (!ctx) return;
     handleClear();
     drawDefaultDiagram(ctx, canvas.width, canvas.height);
+    setDrawingLabels(["Client", "API Server", "Database", "Cache", "Redis"]);
+    saveHistory();
+  };
+
+  const handleCommitText = () => {
+    if (!textInputPos || !textInputValue.trim()) {
+      setTextInputPos(null);
+      setTextInputValue("");
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.font = "14px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillStyle = boxTextColor;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(textInputValue.trim(), textInputPos.x, textInputPos.y);
+
+    const newLabel = textInputValue.trim();
+    if (!drawingLabels.includes(newLabel)) {
+      setDrawingLabels([...drawingLabels, newLabel]);
+    }
+
+    setTextInputPos(null);
+    setTextInputValue("");
     saveHistory();
   };
 
@@ -269,6 +308,17 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    if (activeTool === "text") {
+      if (textInputPos) {
+        handleCommitText();
+      } else {
+        setTextInputPos({ x, y });
+        setTextInputValue("");
+        setTimeout(() => textInputRef.current?.focus(), 50);
+      }
+      return;
+    }
 
     setIsDrawing(true);
     setStartPos({ x, y });
@@ -450,8 +500,17 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
 
       {/* ─── TOP HEADER CONTROLS (Pill + Clear Canvas) ─── */}
       <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
-        <div className="pointer-events-auto rounded-full border border-border bg-card/90 px-3.5 py-1 text-xs font-medium text-foreground shadow-md backdrop-blur-md">
-          System Design Whiteboard
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="rounded-full border border-border bg-card/90 px-3.5 py-1 text-xs font-medium text-foreground shadow-md backdrop-blur-md">
+            System Design Whiteboard
+          </div>
+
+          {drawingLabels.length > 0 && (
+            <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-400 shadow-md backdrop-blur-md">
+              <span className="font-semibold">Detected Components ({drawingLabels.length}):</span>
+              <span className="truncate max-w-[320px] text-foreground">{drawingLabels.join(" • ")}</span>
+            </div>
+          )}
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2">
@@ -494,6 +553,31 @@ export function WhiteboardCanvas({ onNextCategory }: WhiteboardCanvasProps) {
           +
         </button>
       </div>
+
+      {/* ─── FLOATING INLINE TEXT INPUT FOR TEXT TOOL ─── */}
+      {textInputPos && (
+        <div
+          className="absolute z-30"
+          style={{ left: textInputPos.x, top: textInputPos.y - 12 }}
+        >
+          <input
+            ref={textInputRef}
+            type="text"
+            value={textInputValue}
+            onChange={(e) => setTextInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleCommitText();
+              if (e.key === "Escape") {
+                setTextInputPos(null);
+                setTextInputValue("");
+              }
+            }}
+            onBlur={handleCommitText}
+            placeholder="Type label & press Enter..."
+            className="rounded-md border border-primary bg-background px-2.5 py-1 text-xs text-foreground shadow-lg outline-none ring-2 ring-primary/30 min-w-[140px]"
+          />
+        </div>
+      )}
 
       {/* ─── DRAWING CANVAS ─── */}
       <canvas

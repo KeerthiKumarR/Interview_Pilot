@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id: interviewId } = await params;
     const body = await req.json();
-    const { questionId, candidateAnswer, retryCount = 0 } = body;
+    const { questionId, candidateAnswer, retryCount = 0, drawingLabels = [], hasDrawn = false } = body;
 
     if (!questionId || !candidateAnswer) {
       return NextResponse.json(
@@ -39,7 +39,7 @@ export async function POST(
     }).catch(() => []);
     recentMessages.reverse();
 
-    // Run evaluation with conversational history
+    // Run evaluation with conversational history and drawing diagram context
     const evaluation = await evaluateAnswerRubric({
       questionTitle: question.title,
       questionPrompt: question.promptText,
@@ -51,6 +51,8 @@ export async function POST(
       options: (question.options as string[]) || null,
       correctOption: question.correctOption,
       recentConversation: recentMessages,
+      drawingLabels: Array.isArray(drawingLabels) ? drawingLabels : [],
+      hasDrawn: Boolean(hasDrawn),
     });
 
     // Check if should advance

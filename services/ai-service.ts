@@ -699,6 +699,7 @@ ACTIVE INTERVIEW STAGE & TOPIC FOCUS:
 - Current Stage / Part: Stage ${config.currentStage || 1}${config.currentQuestionTitle ? `: ${config.currentQuestionTitle}` : ""}
 ${config.currentQuestionPrompt ? `- Focus Objective: "${config.currentQuestionPrompt}"` : ""}
 ${config.currentCategory ? `- Stage Modality: ${config.currentCategory}` : ""}
+${config.currentCategory === "drawing" ? `- Whiteboard Architecture Stage: Prompt the candidate to walk you through their system diagram or algorithmic data flow. Inquire about the components they've placed (e.g. API Gateway, Services, Cache, Database), communication protocols (HTTPS, WebSockets, gRPC), failure modes, and caching/database trade-offs.` : ""}
 CRITICAL CONTEXT INSTRUCTION:
 - You are strictly conducting this specific stage of the interview right now.
 - Keep your questions, hints, and feedback focused on this active stage. Do not confuse this with other stages or reset your conversational context.
@@ -1024,8 +1025,10 @@ export async function evaluateAnswerRubric(params: {
   options?: string[] | null;
   correctOption?: number | null;
   recentConversation?: Array<{ role: string; content: string }>;
+  drawingLabels?: string[];
+  hasDrawn?: boolean;
 }): Promise<RubricEvaluationResult> {
-  const { questionTitle, questionPrompt, expectedRubric, secondaryProbe, candidateAnswer, isRetry, category, options, correctOption, recentConversation } = params;
+  const { questionTitle, questionPrompt, expectedRubric, secondaryProbe, candidateAnswer, isRetry, category, options, correctOption, recentConversation, drawingLabels = [], hasDrawn = false } = params;
 
   // Option Quiz Direct Evaluation
   if (category === "option_quiz" && typeof correctOption === "number" && Array.isArray(options)) {
@@ -1079,6 +1082,12 @@ export async function evaluateAnswerRubric(params: {
     ? `\nRecent Conversation History:\n${recentConversation.map(m => `${m.role === 'user' ? 'Candidate' : 'Interviewer'}: "${m.content}"`).join("\n")}\n`
     : "";
 
+  const drawingContext = (category === "drawing" && drawingLabels && drawingLabels.length > 0)
+    ? `\n[CANVAS WHITEBOARD DETECTED]: The candidate has drawn/placed the following architectural components on the whiteboard: ${drawingLabels.join(", ")}.\nCRITICAL INSTRUCTION: Explicitly acknowledge these specific components (e.g. "${drawingLabels.slice(0, 3).join(", ")}") in your spokenFeedback and ask a follow-up about how data flows between them or how trade-offs are handled!\n`
+    : (category === "drawing" && hasDrawn)
+      ? `\n[CANVAS WHITEBOARD DETECTED]: The candidate has sketched a visual architecture diagram on the whiteboard canvas. Explicitly acknowledge their visual sketch in your spokenFeedback and ask them to explain the component connections!\n`
+      : "";
+
   const prompt = `You are an expert technical interviewer evaluating a candidate's answer for the question: "${questionTitle}".
 
 Question Prompt:
@@ -1089,7 +1098,7 @@ ${(expectedRubric || []).map((r, i) => `${i + 1}. ${r}`).join("\n")}
 
 Secondary Probing Angle to use if answer is incomplete or confused:
 "${secondaryProbe || "Ask a gentle clarifying question to test their understanding."}"
-${historyContext}
+${historyContext}${drawingContext}
 Candidate's Current Spoken Answer:
 "${candidateAnswer}"
 

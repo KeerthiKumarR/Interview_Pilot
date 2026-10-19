@@ -77,6 +77,7 @@ interface InterviewState {
   selectedOptionIndex: number | null;
   quizSubmitted: boolean;
   drawingData: string | null;
+  drawingLabels: string[];
 
   // Timer
   timeRemainingSeconds: number;
@@ -145,6 +146,7 @@ interface InterviewState {
   setSelectedOptionIndex: (index: number | null) => void;
   setQuizSubmitted: (submitted: boolean) => void;
   setDrawingData: (data: string | null) => void;
+  setDrawingLabels: (labels: string[]) => void;
   setInterviewMode: (mode: "hybrid" | "dynamic") => void;
   setQuestionsList: (questions: any[]) => void;
   setCurrentQuestion: (question: any, index?: number) => void;
@@ -218,6 +220,7 @@ const initialState = {
   selectedOptionIndex: null as number | null,
   quizSubmitted: false,
   drawingData: null as string | null,
+  drawingLabels: [] as string[],
 };
 
 // ─── Store ───────────────────────────────────
@@ -256,6 +259,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
   setSelectedOptionIndex: (selectedOptionIndex) => set({ selectedOptionIndex }),
   setQuizSubmitted: (quizSubmitted) => set({ quizSubmitted }),
   setDrawingData: (drawingData) => set({ drawingData }),
+  setDrawingLabels: (drawingLabels) => set({ drawingLabels }),
 
   setInterviewMode: (interviewMode) => set({ interviewMode }),
 
