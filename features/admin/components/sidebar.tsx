@@ -17,10 +17,13 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { MiraiLogo } from "@/components/mirai-logo";
+import { useCachedData } from "@/lib/client-cache";
 
 export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { data: roleData } = useCachedData<{ role: string; isAdmin: boolean; isStaff: boolean }>("/api/admin/role");
+  const isSuperAdmin = roleData ? roleData.isAdmin : true;
 
   useEffect(() => {
     try {
@@ -42,16 +45,20 @@ export function Sidebar() {
   };
 
   const links = [
-    { name: "Users & Roles", href: "/admin", icon: Users },
+    { name: "Users & Roles", href: "/admin", icon: Users, adminOnly: true },
     { name: "Campus Job Drives", href: "/admin/jobs", icon: GraduationCap },
-    { name: "Interview Roles", href: "/admin/roles", icon: Briefcase },
-    { name: "Skills Manager", href: "/admin/skills", icon: Sparkles },
-    { name: "Interview & Category Studio", href: "/admin/voice-studio", icon: Layers },
-    { name: "Upload Questions", href: "/admin/upload-questions", icon: FileCode2 },
-    { name: "Database Logs", href: "/admin/database", icon: Database },
+    { name: "Interview Roles", href: "/admin/roles", icon: Briefcase, adminOnly: true },
+    { name: "Skills Manager", href: "/admin/skills", icon: Sparkles, adminOnly: true },
+    { name: "Interview & Category Studio", href: "/admin/voice-studio", icon: Layers, adminOnly: true },
+    { name: "Upload Questions", href: "/admin/upload-questions", icon: FileCode2, adminOnly: true },
+    { name: "Database Logs", href: "/admin/database", icon: Database, adminOnly: true },
     { name: "User Feedbacks", href: "/admin/feedback", icon: MessageSquare },
     { name: "Cheaters", href: "/admin/cheaters", icon: ShieldAlert },
   ];
+
+  const visibleLinks = roleData && !roleData.isAdmin
+    ? links.filter((l) => !l.adminOnly)
+    : links;
 
   return (
     <>
@@ -81,7 +88,7 @@ export function Sidebar() {
             >
               <MiraiLogo size={24} />
               <span className="text-base font-bold tracking-tight text-foreground truncate">
-                Mirai<span className="text-primary font-semibold">.Admin</span>
+                Mirai<span className="text-primary font-semibold">{roleData && !roleData.isAdmin ? ".Staff" : ".Admin"}</span>
               </span>
             </Link>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -100,7 +107,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className={`flex-1 ${isCollapsed ? "p-2 space-y-2" : "p-4 space-y-1.5"} overflow-y-auto`}>
-          {links.map((link) => {
+          {visibleLinks.map((link) => {
             const Icon = link.icon;
             const isActive = pathname === link.href;
             return (
