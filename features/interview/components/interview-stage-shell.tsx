@@ -135,6 +135,9 @@ export function InterviewStageShell({
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechAccumulatorRef = useRef<string>("");
+  const liveInterimRef = useRef<string>("");
+  const lastVocalTimeRef = useRef<number>(0);
+  const finalizeAndSendSpeechRef = useRef<() => void>(() => {});
   const stopListeningRef = useRef<() => void>(() => {});
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -144,13 +147,36 @@ export function InterviewStageShell({
     return [...messages].reverse().find((m) => m.role === "assistant");
   }, [messages]);
 
+  const scheduleSilenceSubmission = useCallback(
+    (delayMs: number) => {
+      if (!isLiveVoiceMode || isMicMuted) return;
+      if (aiState === "speaking" || aiState === "thinking") return;
+
+      const hasText =
+        speechAccumulatorRef.current.trim().length >= 2 ||
+        liveInterimRef.current.trim().length >= 2;
+      if (!hasText) return;
+
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+
+      silenceTimeoutRef.current = setTimeout(() => {
+        silenceTimeoutRef.current = null;
+        setIsAutoSending(true);
+        finalizeAndSendSpeechRef.current();
+      }, delayMs);
+    },
+    [isLiveVoiceMode, isMicMuted, aiState]
+  );
+
   const finalizeAndSendSpeech = useCallback(() => {
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
     }
     const currentAccum = speechAccumulatorRef.current.trim();
-    const interim = liveInterim.trim();
+    const interim = liveInterimRef.current.trim();
     let combined = currentAccum;
     if (interim && !currentAccum.toLowerCase().endsWith(interim.toLowerCase())) {
       combined = currentAccum ? `${currentAccum} ${interim}` : interim;
@@ -171,6 +197,7 @@ export function InterviewStageShell({
     if (!fullTranscript || fullTranscript.length < 2) {
       setLiveSpeech("");
       setLiveInterim("");
+      liveInterimRef.current = "";
       speechAccumulatorRef.current = "";
       setIsAutoSending(false);
       return;
@@ -181,12 +208,17 @@ export function InterviewStageShell({
     setIsSpeechListening(false);
     setIsAutoSending(false);
     speechAccumulatorRef.current = "";
+    liveInterimRef.current = "";
     setLiveSpeech("");
     setLiveInterim("");
     setInputText("");
 
     onSendMessage(fullTranscript);
-  }, [liveInterim, onSendMessage]);
+  }, [onSendMessage]);
+
+  useEffect(() => {
+    finalizeAndSendSpeechRef.current = finalizeAndSendSpeech;
+  }, [finalizeAndSendSpeech]);
 
   // Browser-native speech recognition for live speech-to-text
   const { startListening, stopListening, isSupported: isSpeechSupported } = useWebSpeech({
@@ -201,13 +233,17 @@ export function InterviewStageShell({
     },
     onInterimResult: (interim) => {
       if (aiState === "speaking" || aiState === "thinking") return;
+      liveInterimRef.current = interim;
       setLiveInterim(interim);
-      // Cancel any pending silence timeout while the user is actively producing sound or breathing
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-        silenceTimeoutRef.current = null;
-      }
+      lastVocalTimeRef.current = Date.now();
       setIsAutoSending(false);
+
+      // Adaptive silence fallback: if candidate stopped speaking mid-stream
+      // and WebSpeech doesn't emit isFinal (common with background noise or continuous speech),
+      // auto-submit after 1600ms of quiet so candidate is never stuck!
+      if (interim.trim().length >= 2) {
+        scheduleSilenceSubmission(1600);
+      }
     },
     onResult: (transcript) => {
       if (aiState === "speaking" || aiState === "thinking") return;
@@ -224,29 +260,26 @@ export function InterviewStageShell({
         }
       }
       speechAccumulatorRef.current = combined;
+      liveInterimRef.current = "";
       setLiveSpeech(combined);
       setLiveInterim("");
+      lastVocalTimeRef.current = Date.now();
+
       if (!isLiveVoiceMode) {
         setInputText(combined);
       }
 
       if (isLiveVoiceMode) {
-        if (silenceTimeoutRef.current) {
-          clearTimeout(silenceTimeoutRef.current);
-        }
         // Adaptive silence pause:
-        // If the candidate completed a sentence (ends with . ? ! or clear stop signal), wait 1.8s!
-        // If it's a mid-sentence pause or breath without terminal punctuation, give 3.4s breathing room!
+        // If candidate completed a sentence (. ? ! or stop words), wait 1100ms.
+        // If mid-sentence pause, give 1600ms breathing room.
         const trimmed = combined.trim();
         const isSentenceComplete =
           /[.?!]$/.test(trimmed) ||
-          /\b(that's all|that's it|i am done|i'm done|thank you|what do you think)\b$/i.test(trimmed);
-        const pauseDelay = isSentenceComplete ? 1800 : 3400;
+          /\b(that's all|that's it|i am done|i'm done|thank you|what do you think|your thoughts|over to you)\b$/i.test(trimmed);
+        const pauseDelay = isSentenceComplete ? 1100 : 1600;
 
-        silenceTimeoutRef.current = setTimeout(() => {
-          setIsAutoSending(true);
-          finalizeAndSendSpeech();
-        }, pauseDelay);
+        scheduleSilenceSubmission(pauseDelay);
       }
     },
   });
@@ -360,11 +393,27 @@ export function InterviewStageShell({
           const level = Math.min(100, Math.round((avg / 80) * 100));
           setMicVolume(level);
 
-          // If the candidate is actively vocalizing (level > 12),
-          // postpone any pending silence auto-submission so they are never interrupted!
-          if (level > 12 && silenceTimeoutRef.current) {
-            clearTimeout(silenceTimeoutRef.current);
-            silenceTimeoutRef.current = null;
+          const hasPendingSpeech =
+            speechAccumulatorRef.current.trim().length >= 2 ||
+            liveInterimRef.current.trim().length >= 2;
+
+          if (level > 12) {
+            // If the candidate is actively vocalizing (level > 12),
+            // postpone any pending silence auto-submission so they are never interrupted!
+            lastVocalTimeRef.current = Date.now();
+            if (silenceTimeoutRef.current) {
+              clearTimeout(silenceTimeoutRef.current);
+              silenceTimeoutRef.current = null;
+              setIsAutoSending(false);
+            }
+          } else if (hasPendingSpeech) {
+            // Human voice level dropped to silence (<12).
+            // If candidate has unsubmitted speech and at least 350ms of quiet,
+            // ensure the silence countdown is armed!
+            const quietDuration = Date.now() - lastVocalTimeRef.current;
+            if (!silenceTimeoutRef.current && quietDuration > 350) {
+              scheduleSilenceSubmission(1300);
+            }
           }
 
           animFrameRef.current = requestAnimationFrame(trackAudioLevel);
@@ -417,16 +466,21 @@ export function InterviewStageShell({
         const isMonaco = document.activeElement?.classList?.contains("inputarea");
         if (activeTag === "input" || activeTag === "textarea" || isMonaco) return;
 
-        if (speechAccumulatorRef.current || liveSpeech || liveInterim) {
+        if (
+          speechAccumulatorRef.current.trim() ||
+          liveInterimRef.current.trim() ||
+          liveSpeech ||
+          liveInterim
+        ) {
           e.preventDefault();
-          finalizeAndSendSpeech();
+          finalizeAndSendSpeechRef.current();
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isLiveVoiceMode, liveSpeech, liveInterim, finalizeAndSendSpeech]);
+  }, [isLiveVoiceMode, liveSpeech, liveInterim]);
 
   const handleToggleCamera = () => {
     if (cameraStream) {
@@ -460,6 +514,7 @@ export function InterviewStageShell({
       setIsAutoSending(false);
     }
     speechAccumulatorRef.current = "";
+    liveInterimRef.current = "";
     setLiveSpeech("");
     setLiveInterim("");
     onSendMessage(inputText.trim());
@@ -1089,9 +1144,9 @@ export function InterviewStageShell({
 
           {/* ─── TAB 1: LIVE SPOKEN VIVA (VOICE-TO-VOICE ROOM) ───────────── */}
           {activeTab === "voice" && (
-            <div className="flex flex-1 flex-col overflow-hidden my-3 space-y-3">
+            <div className="flex flex-1 flex-col overflow-y-auto pr-1 my-2 space-y-3">
               {/* Interviewer Stage Presence Card with VoiceOrb */}
-              <div className="relative rounded-2xl border border-border bg-gradient-to-b from-secondary/40 via-card to-background p-3.5 shrink-0 shadow-md overflow-hidden space-y-2.5">
+              <div className="relative rounded-2xl border border-border bg-gradient-to-b from-secondary/40 via-card to-background p-3.5 shrink-0 shadow-md space-y-2.5">
                 {/* Interrupt Button (Visible while AI is speaking) */}
                 {aiState === "speaking" && onStopGeneration && (
                   <div className="flex justify-end">
@@ -1111,10 +1166,10 @@ export function InterviewStageShell({
                   state={
                     aiState === "speaking"
                       ? "speaking"
+                      : aiState === "thinking" || isAutoSending
+                      ? "thinking"
                       : isSpeechListening && !isMicMuted
                       ? "listening"
-                      : aiState === "thinking"
-                      ? "thinking"
                       : "idle"
                   }
                   audioLevel={
@@ -1143,6 +1198,23 @@ export function InterviewStageShell({
                       : `${interviewerName} is ready to conduct your placement viva.`}
                   </p>
                 </div>
+
+                {/* Instant Send Action right below Subtitle if Candidate is speaking */}
+                {(liveSpeech || liveInterim) && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs animate-in fade-in">
+                    <span className="text-emerald-400 font-medium text-[11px] truncate mr-2">
+                      🗣️ "{liveSpeech || liveInterim}"
+                    </span>
+                    <button
+                      type="button"
+                      onClick={finalizeAndSendSpeech}
+                      className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 active:scale-95"
+                    >
+                      <span>Send</span>
+                      <kbd className="text-[9px] bg-emerald-800/80 px-1 py-0.2 rounded font-mono">↵</kbd>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Candidate Voice Interaction Card */}
@@ -1227,6 +1299,28 @@ export function InterviewStageShell({
                       </div>
                     )}
                   </div>
+
+                  {/* Prominent Send Answer Action when Speech is Present */}
+                  {(liveSpeech || liveInterim) && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={finalizeAndSendSpeech}
+                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer border border-emerald-400/30"
+                      >
+                        <Mic className="h-3.5 w-3.5 animate-pulse" />
+                        <span>Send Spoken Answer</span>
+                        <kbd className="bg-emerald-950/60 border border-emerald-400/30 px-1.5 py-0.5 text-[10px] rounded font-mono">
+                          Enter ↵
+                        </kbd>
+                        {isAutoSending && (
+                          <span className="text-[10px] text-amber-200 animate-pulse ml-1 font-normal">
+                            (auto-submitting...)
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom Voice Station Quick Controls */}

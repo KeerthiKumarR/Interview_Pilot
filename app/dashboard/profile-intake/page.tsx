@@ -21,7 +21,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { invalidateCache } from "@/lib/client-cache";
+import { invalidateCache, readCache, writeCache } from "@/lib/client-cache";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -218,9 +218,36 @@ function ProfileIntakeMain() {
     }
   };
 
-  // 1. Fetch profile & review data on mount
+  // 1. Fetch profile & review data on mount (with 0ms Stale-While-Revalidate hydration)
   useEffect(() => {
     let isMounted = true;
+
+    // Fast synchronous cache read: eliminates skeleton if data is already cached
+    const cachedProfile = readCache<{ profile: any }>("/api/profile");
+    const cachedReview = readCache<{ review: ReviewData | null; readinessScore: ReadinessScoreData | null }>("/api/review");
+
+    if (cachedProfile?.profile) {
+      const p = cachedProfile.profile;
+      if (p.targetRole) setTargetRole(p.targetRole);
+      if (p.resumeFileName) setResumeFileName(p.resumeFileName);
+      if (p.resumeText) setResumeText(p.resumeText);
+      if (p.resumePageCount) setResumePageCount(p.resumePageCount);
+      if (p.githubUsername) setGithubUsername(p.githubUsername);
+      if (p.leetcodeUsername) setLeetcodeUsername(p.leetcodeUsername);
+      if (p.linkedinUrl) setLinkedinUrl(p.linkedinUrl);
+      if (p.linkedinAbout) setLinkedinAbout(p.linkedinAbout);
+      if (p.skills && Array.isArray(p.skills)) setSkills(p.skills);
+      if (p.projects && Array.isArray(p.projects)) setProjects(p.projects);
+      if (p.achievements && Array.isArray(p.achievements)) setAchievements(p.achievements);
+      if (p.updatedAt) setLastSavedAt(new Date(p.updatedAt));
+      setIsLoading(false);
+    }
+
+    if (cachedReview) {
+      if (cachedReview.review) setReview(cachedReview.review);
+      if (cachedReview.readinessScore) setReadinessScore(cachedReview.readinessScore);
+    }
+
     async function loadInitialData() {
       try {
         const [profileRes, reviewRes] = await Promise.all([
@@ -230,6 +257,7 @@ function ProfileIntakeMain() {
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
+          writeCache("/api/profile", profileData);
           if (isMounted && profileData.profile) {
             const p = profileData.profile;
             if (p.targetRole) setTargetRole(p.targetRole);
@@ -249,6 +277,7 @@ function ProfileIntakeMain() {
 
         if (reviewRes.ok) {
           const reviewData = await reviewRes.json();
+          writeCache("/api/review", reviewData);
           if (isMounted) {
             if (reviewData.review) setReview(reviewData.review);
             if (reviewData.readinessScore) setReadinessScore(reviewData.readinessScore);
@@ -400,13 +429,15 @@ function ProfileIntakeMain() {
 
       setLastSavedAt(new Date());
       invalidateCache("/api/profile");
+      invalidateCache("/api/review");
       invalidateCache("/api/readiness");
       toast.success("Profile saved! Placement review benchmark is syncing in background.");
 
-      // Fetch fresh review data
+      // Fetch fresh review data and update cache
       const revRes = await fetch("/api/review");
       if (revRes.ok) {
         const revData = await revRes.json();
+        writeCache("/api/review", revData);
         if (revData.review) setReview(revData.review);
         if (revData.readinessScore) setReadinessScore(revData.readinessScore);
       }
@@ -432,6 +463,7 @@ function ProfileIntakeMain() {
 
       setReview(data.review);
       setReadinessScore(data.readinessScore);
+      writeCache("/api/review", { review: data.review, readinessScore: data.readinessScore });
       invalidateCache("/api/readiness");
       toast.success("Placement review refreshed successfully!");
     } catch (err: unknown) {

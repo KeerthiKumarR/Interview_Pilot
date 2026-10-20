@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useNavigationLoading } from "@/components/navigation-loading-provider";
 import { Badge } from "@/components/ui/badge";
+import { readCache, writeCache } from "@/lib/client-cache";
 
 interface StartInterviewModalProps {
   onClose: () => void;
@@ -95,6 +96,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
   // Core setup states
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [studentProfile, setStudentProfile] = useState<StudentProfileSummary | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<"technical" | "behavioral">("technical");
   const [duration, setDuration] = useState<number>(15);
   const [difficulty, setDifficulty] = useState<string>("medium");
@@ -106,9 +108,26 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch available roles and student profile in parallel
+  // Fetch available roles and student profile in parallel (with 0ms cache hydration)
   useEffect(() => {
     let ignore = false;
+
+    // Fast synchronous cache read: eliminates waiting for network when cached
+    const cachedRoles = readCache<{ roles: RoleOption[] }>("/api/roles");
+    const cachedProfile = readCache<{ profile: StudentProfileSummary }>("/api/profile");
+
+    if (cachedRoles?.roles && cachedRoles.roles.length > 0) {
+      setRoles(cachedRoles.roles);
+    }
+
+    if (cachedProfile?.profile) {
+      const profileData = cachedProfile.profile;
+      setStudentProfile(profileData);
+      if (profileData.projects && profileData.projects.length > 0) {
+        setSelectedProjectId(profileData.projects[0].id);
+      }
+    }
+
     async function loadInitialData() {
       try {
         const [rolesRes, profileRes] = await Promise.all([
@@ -118,14 +137,20 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
 
         if (rolesRes.ok) {
           const data = await rolesRes.json();
+          writeCache("/api/roles", data);
           if (!ignore) setRoles(data.roles || []);
         }
 
         if (profileRes.ok) {
           const data = await profileRes.json();
+          writeCache("/api/profile", data);
           if (!ignore && data.profile) {
             const profileData: StudentProfileSummary = data.profile;
             setStudentProfile(profileData);
+
+            if (profileData.projects && profileData.projects.length > 0) {
+              setSelectedProjectId(profileData.projects[0].id);
+            }
 
             // Auto-detect programming language from profile tech stack
             const rawSkills = Array.isArray(profileData.skills)
@@ -230,6 +255,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
           jobRoleId: roleIdToUse || undefined,
           personalizeWithProfile: true, // Always automatically anchored to verified profile
           provider: "hosted", // Fast high-throughput cloud inference (Groq)
+          projectId: selectedProjectId || undefined,
         }),
       });
 
@@ -248,7 +274,9 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
     }
   }
 
-  const primaryProject = studentProfile?.projects?.[0];
+  const primaryProject =
+    studentProfile?.projects?.find((p) => p.id === selectedProjectId) ||
+    studentProfile?.projects?.[0];
   const detectedSkills = Array.isArray(studentProfile?.skills)
     ? (studentProfile?.skills as string[])
     : [];
@@ -330,20 +358,82 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
               </div>
 
               <div className="rounded-lg bg-background/60 border border-border/50 p-2">
-                <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
-                  Featured Project
-                </span>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="font-semibold text-foreground truncate">
-                    {primaryProject?.title || "Portfolio Project"}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                    Featured Project
                   </span>
-                  {primaryProject?.liveUrl && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500 font-medium shrink-0">
-                      <Globe className="size-2.5" />
-                      Live
+                  {studentProfile?.projects && studentProfile.projects.length > 1 && (
+                    <span className="text-[9px] font-semibold text-primary">
+                      {studentProfile.projects.length} Projects Available
                     </span>
                   )}
                 </div>
+                {studentProfile?.projects && studentProfile.projects.length > 1 ? (
+                  <div className="mt-1">
+                    <select
+                      value={selectedProjectId || studentProfile.projects[0].id}
+                      onChange={(e) => {
+                        const pId = e.target.value;
+                        setSelectedProjectId(pId);
+                        const proj = studentProfile.projects?.find((p) => p.id === pId);
+                        if (proj) {
+                          const stack = Array.isArray(proj.techStack)
+                            ? proj.techStack.map((s: string) => s.toLowerCase())
+                            : [];
+                          if (
+                            stack.some(
+                              (s: string) =>
+                                s.includes("python") ||
+                                s.includes("django") ||
+                                s.includes("fastapi") ||
+                                s.includes("flask")
+                            )
+                          ) {
+                            setLanguage("python");
+                          } else if (stack.some((s: string) => s.includes("typescript"))) {
+                            setLanguage("typescript");
+                          } else if (stack.some((s: string) => s.includes("java") && !s.includes("javascript"))) {
+                            setLanguage("java");
+                          } else if (stack.some((s: string) => s.includes("c++") || s.includes("cpp"))) {
+                            setLanguage("cpp");
+                          } else if (stack.some((s: string) => s.includes("go") || s.includes("golang"))) {
+                            setLanguage("go");
+                          } else if (
+                            stack.some(
+                              (s: string) =>
+                                s.includes("react") ||
+                                s.includes("node") ||
+                                s.includes("express") ||
+                                s.includes("next")
+                            )
+                          ) {
+                            setLanguage("javascript");
+                          }
+                        }
+                      }}
+                      className="w-full bg-card text-foreground text-xs font-semibold rounded-md border border-border/80 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer truncate"
+                      aria-label="Select Focus Project for Viva"
+                    >
+                      {studentProfile.projects.map((p) => (
+                        <option key={p.id} value={p.id} className="bg-card text-foreground">
+                          {p.title} {Array.isArray(p.techStack) && p.techStack.length > 0 ? `(${p.techStack.slice(0, 3).join(", ")})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-semibold text-foreground truncate">
+                      {primaryProject?.title || "Portfolio Project"}
+                    </span>
+                    {primaryProject?.liveUrl && (
+                      <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500 font-medium shrink-0">
+                        <Globe className="size-2.5" />
+                        Live
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

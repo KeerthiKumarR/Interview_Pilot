@@ -19,7 +19,7 @@ const DEFAULT_TTL_MS = 60 * 1000; // 60 seconds
 /**
  * Reads from in-memory cache first, falls back to sessionStorage for tab persistence.
  */
-function readCache<T>(key: string, ttlMs: number): T | null {
+export function readCache<T>(key: string, ttlMs: number = DEFAULT_TTL_MS): T | null {
   const now = Date.now();
   const mem = memoryCache.get(key);
   if (mem && now - mem.timestamp < ttlMs) {
@@ -47,7 +47,7 @@ function readCache<T>(key: string, ttlMs: number): T | null {
 /**
  * Writes data to memory cache and sessionStorage.
  */
-function writeCache<T>(key: string, data: T) {
+export function writeCache<T>(key: string, data: T) {
   const entry: CacheEntry<T> = {
     data,
     timestamp: Date.now(),

@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       jobRoleId,
       personalizeWithProfile = false,
       provider = "hosted",
+      projectId,
     } = body;
 
     // Validate inputs
@@ -92,7 +93,11 @@ export async function POST(req: Request) {
 
     if (studentProfile && (personalizeWithProfile || (studentProfile.projects && studentProfile.projects.length > 0))) {
       const roleName = studentProfile.targetRole || "Full Stack Developer";
-      const primaryProj = studentProfile.projects?.[0];
+      const primaryProj =
+        (projectId && studentProfile.projects?.find((p) => p.id === projectId)) ||
+        studentProfile.projects?.[0];
+      const otherProjects =
+        studentProfile.projects?.filter((p) => p.id !== primaryProj?.id) || [];
       const projectTitle = primaryProj?.title?.trim();
       const liveUrl = primaryProj?.liveUrl?.trim();
       const repoUrl = primaryProj?.repoUrl?.trim();
@@ -118,6 +123,17 @@ export async function POST(req: Request) {
       }
       if (stackList) {
         projectSections.push(`- **Verified Tech Stack**: ${stackList}`);
+      }
+      if (primaryProj?.description) {
+        projectSections.push(`- **Project Architecture & Summary**: ${primaryProj.description}`);
+      }
+
+      if (otherProjects.length > 0) {
+        projectSections.push(`\n### Candidate's Broader Portfolio (${otherProjects.length} Other Projects Available for Comparison):`);
+        otherProjects.forEach((p, idx) => {
+          const pStack = Array.isArray(p.techStack) && p.techStack.length > 0 ? p.techStack.join(", ") : "Various";
+          projectSections.push(`${idx + 1}. **${p.title}** (Tech: ${pStack})${p.description ? ` — ${p.description}` : ""}`);
+        });
       }
 
       problemDescription = `# ${roleName} Placement Viva Dossier

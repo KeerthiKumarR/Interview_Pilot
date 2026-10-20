@@ -5,6 +5,7 @@ import { Sparkles, Globe } from "lucide-react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { getAvailableVoices, type VoiceOption } from "@/hooks/use-web-speech";
 import { speakTestBackend } from "@/hooks/use-tts";
+import { readCache, writeCache } from "@/lib/client-cache";
 
 function LobbyVideoPreview({ stream }: { stream: MediaStream | null }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -103,10 +104,16 @@ export function InterviewLobby({
 
   useEffect(() => {
     let ignore = false;
+    const cachedProfile = readCache<any>("/api/profile");
+    if (cachedProfile?.profile) {
+      setProfile(cachedProfile.profile);
+    }
+
     fetch("/api/profile")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!ignore && data?.profile) {
+          writeCache("/api/profile", data);
           setProfile(data.profile);
         }
       })
@@ -141,14 +148,20 @@ export function InterviewLobby({
     let isMounted = true;
     const loadVoices = async () => {
       let activeModel = "auto";
-      try {
-        const res = await fetch("/api/tts/settings");
-        if (res.ok) {
-          const data = await res.json();
-          activeModel = data.ttsModel || "auto";
+      const cachedTts = readCache<any>("/api/tts/settings");
+      if (cachedTts?.ttsModel) {
+        activeModel = cachedTts.ttsModel;
+      } else {
+        try {
+          const res = await fetch("/api/tts/settings");
+          if (res.ok) {
+            const data = await res.json();
+            writeCache("/api/tts/settings", data);
+            activeModel = data.ttsModel || "auto";
+          }
+        } catch {
+          /* fallback to auto */
         }
-      } catch {
-        /* fallback to auto */
       }
 
       if (!isMounted) return;

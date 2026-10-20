@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { CodeEditor } from "@/features/editor/components/code-editor";
 import { CODING_PROBLEMS } from "@/data/problems";
+import { getVivaStarterCode } from "@/lib/interview/starter-code";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -193,6 +194,46 @@ export function CodingWorkspaceView({
       "Space complexity should not exceed memory bounds.",
     ];
   }, [isViva, matchedProblem]);
+
+  // Switch programming language dynamically in real time
+  const handleLanguageChange = async (newLang: string) => {
+    if (!newLang || newLang === language) return;
+
+    useInterviewStore.getState().setLanguage(newLang);
+
+    // If current code is the default starter code or empty, swap it to the new language's starter code
+    const currentCode = useInterviewStore.getState().code || "";
+    const isStarterCode =
+      !currentCode.trim() ||
+      currentCode.includes("Viva Scratchpad") ||
+      currentCode.includes("export async function handleRequest") ||
+      currentCode.includes("public static void main") ||
+      currentCode.includes("def handle_request") ||
+      currentCode.includes("int main()") ||
+      currentCode.includes("func HandleRequest");
+
+    if (isStarterCode) {
+      const roleName = vivaMetadata?.roleName || "Technical Placement";
+      const projectRef = vivaMetadata?.projectTitle || "System Architecture";
+      const stackSkills = vivaMetadata?.techStack || "Core Architecture";
+      const newStarter = getVivaStarterCode(newLang, roleName, projectRef, stackSkills);
+      useInterviewStore.getState().setCode(newStarter);
+    }
+
+    // Persist to backend so it survives refresh
+    try {
+      const currentInterviewId = useInterviewStore.getState().interviewId;
+      if (currentInterviewId) {
+        await fetch(`/api/interviews/${currentInterviewId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ language: newLang }),
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to persist language change", e);
+    }
+  };
 
   // Execute Code via /api/execute sandbox API
   const handleRun = async () => {
@@ -708,24 +749,22 @@ export function CodingWorkspaceView({
       <div className="flex flex-1 flex-col overflow-hidden bg-card">
         {/* Editor Action Header */}
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 bg-card">
-          {/* Language Selector Badge */}
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-1.5 text-xs font-medium text-foreground">
-            <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-semibold">
-              {language === "cpp"
-                ? "C++"
-                : language === "python"
-                ? "Python 3"
-                : language === "javascript"
-                ? "JavaScript"
-                : language === "typescript"
-                ? "TypeScript"
-                : language === "java"
-                ? "Java"
-                : language === "go"
-                ? "Go"
-                : language}
-            </span>
+          {/* Interactive Language Selector Dropdown */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary/50 transition">
+            <Code2 className="h-3.5 w-3.5 text-primary shrink-0" />
+            <select
+              value={language || "javascript"}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              aria-label="Select Programming Language"
+              className="bg-transparent font-semibold text-foreground focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="javascript" className="bg-card text-foreground">JavaScript</option>
+              <option value="typescript" className="bg-card text-foreground">TypeScript</option>
+              <option value="python" className="bg-card text-foreground">Python 3</option>
+              <option value="java" className="bg-card text-foreground">Java</option>
+              <option value="cpp" className="bg-card text-foreground">C++</option>
+              <option value="go" className="bg-card text-foreground">Go</option>
+            </select>
           </div>
 
           {/* Action Buttons: Run & Submit */}

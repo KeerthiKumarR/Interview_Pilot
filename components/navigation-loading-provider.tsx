@@ -10,7 +10,6 @@ import React, {
   Suspense,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
 
 interface NavigationContextType {
   isNavigating: boolean;
@@ -64,15 +63,15 @@ export function NavigationLoadingProvider({
     setIsNavigating(true);
     if (target) setNavigatingTarget(target);
 
-    // Safety timeout: automatically reset after 8 seconds in case of network issue or cancelled navigation
+    // Fast safety timeout: resets in 1200ms max so user is NEVER blocked
     if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
     safetyTimerRef.current = setTimeout(() => {
       setIsNavigating(false);
       setNavigatingTarget(null);
-    }, 8000);
+    }, 1200);
   }, []);
 
-  // When pathname changes, navigation completed!
+  // When pathname changes, navigation is complete!
   useEffect(() => {
     stopNavigation();
   }, [pathname, stopNavigation]);
@@ -80,7 +79,6 @@ export function NavigationLoadingProvider({
   // Intercept all internal <a> and <Link> clicks globally
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      // Find closest anchor tag
       const target = (e.target as HTMLElement).closest("a");
       if (!target) return;
 
@@ -109,10 +107,8 @@ export function NavigationLoadingProvider({
         const targetUrl = new URL(href, window.location.origin);
         const currentUrl = new URL(window.location.href);
 
-        // Only trigger loading if navigating to a different page or query
-        const isDifferentPath =
-          targetUrl.pathname !== currentUrl.pathname ||
-          targetUrl.search !== currentUrl.search;
+        // Only trigger loading bar if navigating to a different pathname
+        const isDifferentPath = targetUrl.pathname !== currentUrl.pathname;
 
         if (isDifferentPath) {
           startNavigation(targetUrl.pathname);
@@ -142,40 +138,19 @@ export function NavigationLoadingProvider({
         <NavigationEvents onReset={stopNavigation} />
       </Suspense>
 
-      {/* Top slim animated loading progress bar */}
+      {/* Sleek, Non-Blocking Top Progress Bar (Linear/GitHub/YouTube style) */}
       {isNavigating && (
         <div
-          className="fixed top-0 left-0 right-0 z-[10001] h-1 bg-muted overflow-hidden"
+          className="fixed top-0 left-0 right-0 z-[10001] h-0.5 overflow-hidden pointer-events-none"
           role="progressbar"
           aria-label="Loading page"
         >
-          <div className="h-full bg-primary animate-indeterminate origin-left" />
+          <div className="h-full bg-gradient-to-r from-emerald-500 via-primary to-cyan-400 animate-indeterminate origin-left shadow-[0_0_8px_rgba(16,185,129,0.7)]" />
         </div>
       )}
 
-      {/* Floating Centered Loading Pill + Click Blocker */}
-      {isNavigating && (
-        <>
-          {/* Transparent click blocker: stops all other buttons from being clicked while loading */}
-          <div
-            className="fixed inset-0 z-[10000] cursor-wait bg-background/25 backdrop-blur-[1.5px] select-none pointer-events-auto"
-            aria-hidden="true"
-          />
-
-          {/* Floating Pill indicator */}
-          <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[10002] pointer-events-none flex items-center gap-2.5 px-4 py-2 rounded-full border border-border bg-card/95 text-foreground shadow-xl backdrop-blur-md text-xs font-semibold animate-in fade-in slide-in-from-top-3 duration-200">
-            <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
-            <span>Loading...</span>
-          </div>
-        </>
-      )}
-
-      {/* The main view: subtly fades out during navigation and disables pointer events */}
-      <div
-        className={`min-h-full transition-opacity duration-200 ${
-          isNavigating ? "opacity-60 pointer-events-none select-none" : "opacity-100"
-        }`}
-      >
+      {/* Main content: Always crisp, always clickable, never dimmed */}
+      <div className="min-h-full">
         {children}
       </div>
     </NavigationContext.Provider>

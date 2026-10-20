@@ -153,6 +153,7 @@ interface InterviewState {
   setCurrentQuestionIndex: (index: number) => void;
   setQuestionRetryCount: (count: number) => void;
   setStatus: (status: InterviewState["status"]) => void;
+  setLanguage: (language: string) => void;
   setCode: (code: string) => void;
   setAIState: (state: AIState) => void;
   setMode: (mode: InterviewMode) => void;
@@ -277,6 +278,8 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
   setQuestionRetryCount: (questionRetryCount) => set({ questionRetryCount }),
 
   setStatus: (status) => set({ status }),
+
+  setLanguage: (language) => set({ language }),
 
   setCode: (code) => set({ code }),
 

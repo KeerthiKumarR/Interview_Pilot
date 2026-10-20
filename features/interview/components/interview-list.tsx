@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { formatRelativeTime, getScoreColor } from "@/lib/utils";
 import { Loader2, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
@@ -62,6 +62,13 @@ export function InterviewList({
   const { isNavigating, startNavigation } = useNavigationLoading();
   const listTopRef = useRef<HTMLDivElement>(null);
 
+  // Auto-reset card loading state when navigation finishes
+  useEffect(() => {
+    if (!isNavigating) {
+      setActiveInterviewId(null);
+    }
+  }, [isNavigating]);
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
@@ -70,7 +77,6 @@ export function InterviewList({
   const endIndex = Math.min(page * pageSize, total);
 
   const handleCardClick = (id: string, href: string) => {
-    if (isNavigating) return;
     setActiveInterviewId(id);
     startNavigation(href);
   };
@@ -126,7 +132,6 @@ export function InterviewList({
               : `/interview/${interview.id}`;
 
           const isCardLoading = activeInterviewId === interview.id;
-          const isOtherCardDisabled = isNavigating && !isCardLoading;
 
           const createdIso =
             interview.createdAt instanceof Date
@@ -141,8 +146,6 @@ export function InterviewList({
               className={`group flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-all ${
                 isCardLoading
                   ? "bg-secondary/90 ring-1 ring-primary/50 shadow-xs cursor-wait"
-                  : isOtherCardDisabled
-                  ? "opacity-40 pointer-events-none"
                   : "hover:bg-secondary/50 cursor-pointer"
               }`}
             >

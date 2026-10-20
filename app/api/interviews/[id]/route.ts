@@ -77,7 +77,7 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const { id } = await context.params;
     const body = await req.json();
-    const { code, action, status: newStatus, tabSwitchCount, outOfFrameCount, multiplePeopleCount } = body;
+    const { code, action, status: newStatus, tabSwitchCount, outOfFrameCount, multiplePeopleCount, language } = body;
 
     const user = await prisma.user.findUnique({
       where: { clerkId },
@@ -106,6 +106,10 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     if (code !== undefined) {
       updateData.code = code;
+    }
+
+    if (language !== undefined && typeof language === "string") {
+      updateData.language = language;
     }
 
     if (tabSwitchCount !== undefined && typeof tabSwitchCount === "number") {

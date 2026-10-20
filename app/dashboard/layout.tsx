@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
+import { getCurrentUserRole } from "@/lib/admin-auth";
 import { Badge } from "@/components/ui/badge";
 import { MiraiLogo } from "@/components/mirai-logo";
 
@@ -21,8 +21,9 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
-  const isStaff = await authorizeStaff();
-  const isAdmin = await authorizeAdmin();
+  const role = await getCurrentUserRole();
+  const isAdmin = role === "admin";
+  const isStaff = role === "staff" || isAdmin;
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
