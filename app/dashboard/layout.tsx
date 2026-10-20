@@ -65,7 +65,7 @@ export default async function DashboardLayout({
             >
               Jobs & Drives
             </Link>
-            {isStaff && (
+            {isStaff && !isAdmin && (
               <Link
                 href="/admin/jobs"
                 className="text-primary font-semibold hover:underline transition-colors"

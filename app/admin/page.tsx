@@ -56,13 +56,19 @@ export default function AdminUsersPage() {
   const { notify } = useAdminNotifications();
   const { data: cacheData, loading: isLoading, error, mutate } = useCachedData<AdminDataResponse>("/api/admin");
   const users = cacheData?.users || [];
-  const currentUserRole = cacheData?.currentUserRole || "admin";
+  const currentUserRole = cacheData?.currentUserRole || "student";
   const isSuperAdmin = currentUserRole === "admin";
 
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "admin">("all");
   const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoading && cacheData && cacheData.currentUserRole !== "admin") {
+      window.location.href = "/admin/jobs";
+    }
+  }, [cacheData, isLoading]);
 
   const toggleUserExpansion = (userId: string) => {
     setExpandedUsers((prev) => ({

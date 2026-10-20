@@ -4,12 +4,13 @@ import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
 import { invalidateUserSessionCache } from "@/lib/auth-user";
 
 export async function GET() {
-  const isStaff = await authorizeStaff();
-  if (!isStaff) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const isAdmin = await authorizeAdmin();
+  if (!isAdmin) {
+    return NextResponse.json(
+      { error: "Forbidden: Super-Admin access required to view and manage users" },
+      { status: 403 }
+    );
+  }
 
   try {
     // Only return sensitive system settings and API keys to Super Admins
