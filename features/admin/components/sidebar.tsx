@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Settings,
   Database,
   Users,
   MessageSquare,
@@ -17,12 +16,10 @@ import {
   FileCode2,
   GraduationCap,
 } from "lucide-react";
-import { SettingsModal } from "./settings-modal";
 import { MiraiLogo } from "@/components/mirai-logo";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
@@ -146,44 +143,19 @@ export function Sidebar() {
                 Dashboard
               </div>
             </Link>
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-lg border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors cursor-pointer relative group"
-              title="Open System & AI Settings"
-              aria-label="Open settings"
-            >
-              <Settings className="w-4 h-4 hover:rotate-45 transition-transform duration-300 shrink-0" />
-              <div className="absolute left-full ml-2 px-2.5 py-1 bg-popover text-popover-foreground text-[11px] font-medium rounded-md shadow-md border border-border whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50">
-                Settings
-              </div>
-            </button>
           </div>
         ) : (
           <div className="p-4 border-t border-border flex items-center justify-between gap-2 bg-card">
             <Link
               href="/dashboard"
-              className="text-xs text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1"
+              className="text-xs text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1.5"
             >
               <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-              <span>Dashboard</span>
+              <span>Back to Dashboard</span>
             </Link>
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="group flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground shadow-xs transition-all hover:bg-secondary hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
-              title="Open System & AI Settings"
-              aria-label="Open settings"
-            >
-              <Settings className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground group-hover:rotate-45 transition-transform duration-300 shrink-0" />
-              <span className="font-medium">Settings</span>
-            </button>
           </div>
         )}
       </div>
-
-      {/* 80% screen Settings Modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </>
   );
 }
