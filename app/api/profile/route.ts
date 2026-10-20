@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { SaveProfilePayload } from "@/types/profile";
+import { executeAndPersistProfileAudit } from "@/lib/review/run-profile-audit";
 
 export const dynamic = "force-dynamic";
 
@@ -189,6 +190,12 @@ export async function POST(req: Request) {
     });
 
     invalidateProfileCache(user.id);
+
+    // Auto-trigger benchmark audit & readiness score recalculation in the background
+    // whenever profile details or resume text are updated
+    void executeAndPersistProfileAudit(user.id).catch((err) => {
+      console.warn("Background profile audit error:", err);
+    });
 
     return NextResponse.json({
       success: true,

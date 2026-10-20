@@ -219,7 +219,7 @@ export async function GET() {
         weightedContribution: Math.round(linkedinScore * 0.05),
         description: "Audits headline keyword relevance and narrative bio summary.",
         status: getStatus(linkedinScore),
-        targetTab: "/dashboard/review",
+        targetTab: "/dashboard/profile-intake?tab=review",
       },
       {
         id: "achievements",
@@ -257,7 +257,7 @@ export async function GET() {
         title: "Run Placement Review & Apply XYZ Rewrites",
         description: "Inspect resume bullets for quantifiable numbers and copy ready-to-paste XYZ rewrites.",
         potentialPoints: Math.round((90 - resumeScore) * 0.25),
-        href: "/dashboard/review",
+        href: "/dashboard/profile-intake?tab=review",
         actionText: "Audit Resume in Review Hub",
         category: "resume",
       });
@@ -305,7 +305,7 @@ export async function GET() {
         title: "Copy AI-Optimized Headline & LinkedIn Bio",
         description: "Increase recruiter search appearances with an industry-tailored headline and bio.",
         potentialPoints: Math.round((90 - linkedinScore) * 0.05),
-        href: "/dashboard/review",
+        href: "/dashboard/profile-intake?tab=review",
         actionText: "Copy LinkedIn Rewrites",
         category: "resume",
       });
@@ -348,14 +348,21 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({
-      overallScore,
-      tier,
-      targetRole: profile?.targetRole || "Full Stack Developer",
-      components,
-      topFixes,
-      lastUpdated: stored?.updatedAt || new Date().toISOString(),
-    });
+    return NextResponse.json(
+      {
+        overallScore,
+        tier,
+        targetRole: profile?.targetRole || "Full Stack Developer",
+        components,
+        topFixes,
+        lastUpdated: stored?.updatedAt || new Date().toISOString(),
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error: unknown) {
     console.error("Error in GET /api/readiness:", error);
     const msg = error instanceof Error ? error.message : "Failed to calculate readiness score.";

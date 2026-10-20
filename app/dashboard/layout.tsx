@@ -42,34 +42,28 @@ export default async function DashboardLayout({
         <div className="flex items-center gap-4">
           <nav className="flex items-center gap-3 text-xs sm:text-sm font-medium">
             <Link
+              href="/dashboard"
+              className="text-muted-foreground hover:text-foreground transition-colors font-semibold"
+            >
+              Mock Interview
+            </Link>
+            <Link
               href="/dashboard/profile-intake"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              1. Profile Intake
-            </Link>
-            <Link
-              href="/dashboard/review"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              2. Review Engine
-            </Link>
-            <Link
-              href="/dashboard"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              3. Mock Interview
+              Profile & Review
             </Link>
             <Link
               href="/dashboard/readiness"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              4. Readiness Score
+              Readiness Score
             </Link>
             <Link
               href="/dashboard/jobs"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              5. Jobs & Drives
+              Jobs & Drives
             </Link>
             {isStaff && (
               <Link

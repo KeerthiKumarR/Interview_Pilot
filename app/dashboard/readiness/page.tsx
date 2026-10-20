@@ -14,7 +14,8 @@ import { ReadinessHeroCard } from "@/features/readiness/components/readiness-her
 import { ReadinessBreakdownCard } from "@/features/readiness/components/readiness-breakdown-card";
 import { HighImpactActionsCard } from "@/features/readiness/components/high-impact-actions-card";
 import { ReadinessSkeleton } from "@/features/readiness/components/readiness-skeleton";
-import { ReadinessComponent, HighImpactAction } from "@/app/api/readiness/route";
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
+import type { ReadinessComponent, HighImpactAction } from "@/app/api/readiness/route";
 
 interface ReadinessData {
   overallScore: number;
@@ -26,22 +27,14 @@ interface ReadinessData {
 }
 
 export default function PlacementReadinessPage() {
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, loading: isLoading, refresh } = useCachedData<ReadinessData>("/api/readiness");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [data, setData] = useState<ReadinessData | null>(null);
 
   const fetchReadiness = async (showToast = false) => {
     try {
       if (showToast) setIsRefreshing(true);
-      const res = await fetch("/api/readiness");
-      if (!res.ok) {
-        if (res.status === 401) {
-          toast.error("Please sign in to view your readiness scorecard.");
-        }
-        return;
-      }
-      const json = await res.json();
-      setData(json);
+      invalidateCache("/api/readiness");
+      await refresh();
       if (showToast) {
         toast.success("Readiness scorecard updated with latest metrics!");
       }
@@ -49,35 +42,9 @@ export default function PlacementReadinessPage() {
       console.error("Failed to load readiness data:", err);
       toast.error("Unable to load placement readiness score.");
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    let ignore = false;
-    async function init() {
-      try {
-        const res = await fetch("/api/readiness");
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!ignore) {
-          setData(json);
-        }
-      } catch (err) {
-        console.error("Readiness initialization error:", err);
-      } finally {
-        if (!ignore) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    init();
-    return () => {
-      ignore = true;
-    };
-  }, []);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 space-y-8">
