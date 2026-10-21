@@ -87,6 +87,80 @@ export async function POST(req: Request, context: RouteContext) {
       });
     }
 
+    // Check if session was terminated early during introduction (fewer than 3 candidate responses or < 5 total messages)
+    const userMessages = interview.messages.filter((m) => m.role === "user");
+    const isEarlyExit = userMessages.length < 3 || interview.messages.length < 5;
+
+    if (isEarlyExit) {
+      const candidateGreeting = userMessages[0]?.content?.trim() || "Brief introduction";
+      const earlyReport = {
+        overallScore: 50,
+        technicalScore: 50,
+        communicationScore: 75,
+        problemSolvingScore: 50,
+        optimizationScore: 50,
+        codeQualityScore: 50,
+        strengths: [
+          "Attended session on time and engaged in introductory greeting",
+          "Confirmed target role and showed enthusiasm for placement viva",
+        ],
+        weaknesses: [
+          "Session concluded early during the introduction stage before technical questions or coding began",
+        ],
+        suggestions: [
+          "Complete a full 15-30 minute mock interview session to be evaluated on live coding, problem solving, and system architecture",
+          "Walk through your project's data flow and technical stack in Stages 2 and 3",
+        ],
+        summary: `This interview session was concluded early during the introduction phase (${interview.messages.length} messages exchanged). Technical problem solving, system architecture defense, and coding exercises were not reached. Please complete a full session to receive an accurate skill and technical evaluation.`,
+        nextSteps: [
+          "Start a new mock interview session and proceed through all 4 stages: Intro, Project Defense, System Scaling, and Coding Scratchpad",
+        ],
+        transcriptAnnotations: [],
+        timeComplexity: "N/A",
+        spaceComplexity: "N/A",
+        isSolved: false,
+        estimatedLevel: "Incomplete (Early Exit)",
+        recruiterVerdict: "INCOMPLETE",
+        recruiterNotes: {
+          executiveSummary: "Candidate exited during the introduction phase; technical competencies were not evaluated.",
+          hiringRecommendation: "Session incomplete. Reschedule or retake full interview.",
+          keyQuotes: [
+            {
+              topic: "Introduction",
+              quote: candidateGreeting.slice(0, 120),
+              analysis: "Candidate provided initial introduction before early conclusion of the session."
+            }
+          ],
+        },
+      };
+
+      const savedReport = await prisma.report.create({
+        data: {
+          interviewId: id,
+          overallScore: earlyReport.overallScore,
+          technicalScore: earlyReport.technicalScore,
+          communicationScore: earlyReport.communicationScore,
+          problemSolvingScore: earlyReport.problemSolvingScore,
+          optimizationScore: earlyReport.optimizationScore,
+          codeQualityScore: earlyReport.codeQualityScore,
+          strengths: earlyReport.strengths,
+          weaknesses: earlyReport.weaknesses,
+          suggestions: earlyReport.suggestions,
+          summary: earlyReport.summary,
+          nextSteps: earlyReport.nextSteps,
+          transcriptAnnotations: earlyReport.transcriptAnnotations,
+          timeComplexity: earlyReport.timeComplexity,
+          spaceComplexity: earlyReport.spaceComplexity,
+          isSolved: earlyReport.isSolved,
+          estimatedLevel: earlyReport.estimatedLevel,
+          recruiterVerdict: earlyReport.recruiterVerdict,
+          recruiterNotes: earlyReport.recruiterNotes,
+        },
+      });
+
+      return NextResponse.json({ report: savedReport });
+    }
+
     // Check interview mode (Dynamic vs Hybrid)
     const modeSetting = await prisma.systemSetting.findUnique({
       where: { key: "INTERVIEW_MODE" },

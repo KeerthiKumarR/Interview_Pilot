@@ -994,10 +994,17 @@ ADVANCED METRICS:
 - "spaceComplexity": Analyze the final code to determine the Big-O space complexity (auxiliary space).
 - "isSolved": Set to true ONLY if the candidate's final code effectively solves the core problem and handles standard edge cases.
 - "estimatedLevel": Determine seniority based on performance:
-  - Very Basic: Could not solve the problem or required extreme hand-holding. If you cannot determine, default to "Very Basic". Do not use "Unknown".
+  - Incomplete (Early Exit): The candidate exited early during introduction or warm-up before technical problem-solving or coding was conducted.
+  - Very Basic: Completed the session but could not understand basic concepts or required extreme hand-holding. (Do NOT use this for early exits!).
   - Junior: Needed heavy hints, missed edge cases, brute-force solutions.
   - Mid-Level: Solid execution, good communication, but maybe missed optimal approach or minor edge cases initially.
   - Senior: Wrote optimal code quickly, proactively handled edge cases, excellent communication of trade-offs.
+
+INCOMPLETE SESSIONS & EARLY EXITS:
+- If the transcript has few exchanges or the candidate exited early during introduction:
+  - Set "estimatedLevel" to "Incomplete (Early Exit)".
+  - Set "isSolved" to false.
+  - Note in the summary that the session concluded early before technical problem solving could begin, and avoid penalizing them as having failed a technical challenge.
 
 ANNOTATIONS:
 - The transcript contains messages prefixed with "[Msg X]".

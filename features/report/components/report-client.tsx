@@ -309,12 +309,40 @@ export function ReportClient({
             </div>
           )}
           
+          {/* Incomplete Session Banner */}
+          {(report.estimatedLevel?.toLowerCase().includes("incomplete") || messageCount < 4 || report.recruiterVerdict === "INCOMPLETE") && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-1">
+                  <h3 className="font-semibold text-sm text-amber-300">Session Concluded During Introduction</h3>
+                  <p className="text-xs text-amber-200/90 leading-relaxed">
+                    This interview ended after only {messageCount} message{messageCount === 1 ? "" : "s"} during the introductory stage. Technical problem solving, system architecture defense, and live coding exercises were not reached, so this does not reflect your actual engineering ability.
+                  </p>
+                  <div className="mt-2">
+                    <Link
+                      href="/dashboard"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-100 underline underline-offset-2"
+                    >
+                      Start a Full Practice Interview &rarr;
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Advanced Metrics / Metadata */}
           <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col rounded-xl border border-border p-4 bg-card">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Status</span>
               <div className="flex items-center gap-2">
-                {report.isSolved ? (
+                {report.estimatedLevel?.toLowerCase().includes("incomplete") || messageCount < 4 || report.recruiterVerdict === "INCOMPLETE" ? (
+                  <>
+                    <AlertCircle className="w-[18px] h-[18px] text-amber-500" />
+                    <span className="font-semibold text-amber-500">Incomplete (Early Exit)</span>
+                  </>
+                ) : report.isSolved ? (
                   <>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -337,7 +365,11 @@ export function ReportClient({
 
             <div className="flex flex-col rounded-xl border border-border p-4 bg-card">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Estimated Level</span>
-              <span className="font-semibold text-primary">{report.estimatedLevel || "Unknown"}</span>
+              <span className="font-semibold text-primary">
+                {report.estimatedLevel?.toLowerCase().includes("incomplete") || messageCount < 4 || report.recruiterVerdict === "INCOMPLETE"
+                  ? "Incomplete (Intro Only)"
+                  : report.estimatedLevel || "Unknown"}
+              </span>
             </div>
 
             <div className="flex flex-col rounded-xl border border-border p-4 bg-card">
@@ -487,54 +519,69 @@ export function ReportClient({
           )}
 
           {/* Overall Score */}
-          <div className="flex items-center gap-6 rounded-xl border border-border p-6">
-            <div className="flex flex-col items-center">
-              <span
-                className={`text-4xl font-bold tabular-nums ${getScoreColor(report.overallScore)}`}
-              >
-                {report.overallScore}
-              </span>
-              <span className="mt-1 text-xs text-muted-foreground">
-                / 100
-              </span>
-            </div>
-            <div className="flex-1">
-              <h2 className="text-sm font-semibold">Overall Score</h2>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {report.summary}
-              </p>
-            </div>
-          </div>
+          {(() => {
+            const isIncomplete = report.estimatedLevel?.toLowerCase().includes("incomplete") || messageCount < 4 || report.recruiterVerdict === "INCOMPLETE";
 
-          {/* Score Breakdown */}
-          <div>
-            <h2 className="mb-4 text-sm font-semibold text-muted-foreground">
-              Score Breakdown
-            </h2>
-            <div className="grid grid-cols-5 gap-3">
-              {[
-                { label: "Technical", score: report.technicalScore },
-                { label: "Communication", score: report.communicationScore },
-                { label: "Problem Solving", score: report.problemSolvingScore },
-                { label: "Optimization", score: report.optimizationScore },
-                { label: "Code Quality", score: report.codeQualityScore },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex flex-col items-center rounded-lg border border-border p-4"
-                >
-                  <span
-                    className={`text-xl font-bold tabular-nums ${getScoreColor(item.score)}`}
-                  >
-                    {item.score}
-                  </span>
-                  <span className="mt-1 text-center text-[10px] text-muted-foreground">
-                    {item.label}
-                  </span>
+            return (
+              <>
+                <div className="flex items-center gap-6 rounded-xl border border-border p-6">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`text-4xl font-bold tabular-nums ${isIncomplete ? "text-amber-500" : getScoreColor(report.overallScore)}`}
+                    >
+                      {isIncomplete ? "—" : report.overallScore}
+                    </span>
+                    <span className="mt-1 text-xs text-muted-foreground font-medium">
+                      {isIncomplete ? "Incomplete" : "/ 100"}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-sm font-semibold">
+                      {isIncomplete ? "Session Evaluation (Early Exit)" : "Overall Score"}
+                    </h2>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      {report.summary}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+
+                {/* Score Breakdown */}
+                <div>
+                  <h2 className="mb-4 text-sm font-semibold text-muted-foreground">
+                    Score Breakdown
+                  </h2>
+                  <div className="grid grid-cols-5 gap-3">
+                    {[
+                      { label: "Technical", score: isIncomplete ? "—" : report.technicalScore, sub: isIncomplete ? "Not reached" : null },
+                      { label: "Communication", score: report.communicationScore, sub: isIncomplete ? "Intro only" : null },
+                      { label: "Problem Solving", score: isIncomplete ? "—" : report.problemSolvingScore, sub: isIncomplete ? "Not reached" : null },
+                      { label: "Optimization", score: isIncomplete ? "—" : report.optimizationScore, sub: isIncomplete ? "Not reached" : null },
+                      { label: "Code Quality", score: isIncomplete ? "—" : report.codeQualityScore, sub: isIncomplete ? "Not reached" : null },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex flex-col items-center rounded-lg border border-border p-4"
+                      >
+                        <span
+                          className={`text-xl font-bold tabular-nums ${typeof item.score === "number" ? getScoreColor(item.score) : "text-muted-foreground"}`}
+                        >
+                          {item.score}
+                        </span>
+                        <span className="mt-1 text-center text-[10px] text-muted-foreground font-medium">
+                          {item.label}
+                        </span>
+                        {item.sub && (
+                          <span className="text-[9px] text-amber-500 font-medium mt-0.5">
+                            {item.sub}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Strengths */}
           <div>

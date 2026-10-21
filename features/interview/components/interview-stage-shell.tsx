@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Settings,
   PhoneOff,
+  AlertCircle,
   Maximize,
   Minimize,
   Maximize2,
@@ -1554,39 +1555,59 @@ export function InterviewStageShell({
       </main>
 
       {/* ─── END INTERVIEW CONFIRMATION MODAL ───────────────────────── */}
-      {showEndModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-rose-500/30 bg-card p-5 shadow-2xl text-foreground">
-            <div className="flex items-center gap-2 text-rose-500 mb-2">
-              <PhoneOff className="h-5 w-5" />
-              <h3 className="font-bold text-foreground text-sm">Conclude Interview?</h3>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-5">
-              Are you sure you want to end this interview session? Your performance will be submitted and evaluated to generate your executive report.
-            </p>
+      {showEndModal && (() => {
+        const candidateMessageCount = messages.filter((m) => m.role === "user").length;
+        const isIntroPhase = candidateMessageCount < 3 || currentStageNumber === 1;
 
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowEndModal(false)}
-                className="rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEndModal(false);
-                  onEndInterview();
-                }}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-500 transition shadow-xs cursor-pointer"
-              >
-                End & View Report
-              </button>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl text-foreground">
+              <div className="flex items-center gap-2 text-rose-500 mb-2">
+                <PhoneOff className="h-5 w-5" />
+                <h3 className="font-bold text-foreground text-sm">Conclude Interview?</h3>
+              </div>
+
+              {isIntroPhase ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 mb-4 text-xs text-amber-200">
+                  <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    Still in Introduction Stage
+                  </p>
+                  <p className="mt-1 text-[11px] text-amber-200/90 leading-relaxed">
+                    You have only exchanged {candidateMessageCount} response{candidateMessageCount === 1 ? "" : "s"}. Ending now will conclude this session as an <strong>Incomplete Early Exit</strong> before technical problem solving and coding begin.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground leading-relaxed mb-5">
+                  Are you sure you want to end this interview session? Your performance will be submitted and evaluated to generate your executive report.
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEndModal(false)}
+                  className="rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition cursor-pointer"
+                >
+                  Continue Interview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEndModal(false);
+                    onEndInterview();
+                  }}
+                  className={`rounded-lg px-4 py-2 text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
+                    isIntroPhase ? "bg-amber-600 hover:bg-amber-500" : "bg-rose-600 hover:bg-rose-500"
+                  }`}
+                >
+                  {isIntroPhase ? "End Early (Incomplete)" : "End & View Report"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
