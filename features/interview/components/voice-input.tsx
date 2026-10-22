@@ -30,6 +30,11 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isManualRecording, setIsManualRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState<string>("");
+
+  // Web Speech Fallback Refs for Manual Recording
+  const manualRecognitionRef = useRef<any>(null);
+  const manualSpeechAccumulatorRef = useRef<string>("");
 
   // Web Audio Visualizer Refs
   const volumeRef = useRef<HTMLSpanElement>(null);
@@ -177,7 +182,7 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
   }, [stopVolumeVisualizer]);
 
 
-  // ─── Manual Recording Logic (MediaRecorder) ────
+  // ─── Manual Recording Logic (MediaRecorder + Web Speech Fallback) ────
 
   const startManualRecording = async () => {
     if (useInterviewStore.getState().isMicMuted) {
@@ -185,8 +190,50 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
       return;
     }
     setErrorMessage(null);
+    manualSpeechAccumulatorRef.current = "";
+    setLiveTranscript("");
+
     const stream = await startVolumeVisualizer();
     if (!stream) return;
+
+    // Start parallel client-side Web Speech recognition as instant fallback
+    if (typeof window !== "undefined") {
+      const SpeechRecognitionClass =
+        window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognitionClass) {
+        try {
+          const rec = new SpeechRecognitionClass();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = sttLanguage || "en-IN";
+          rec.onresult = (event: any) => {
+            let interim = "";
+            let final = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              if (event.results[i].isFinal) {
+                final += event.results[i][0].transcript + " ";
+              } else {
+                interim += event.results[i][0].transcript;
+              }
+            }
+            if (final.trim()) {
+              manualSpeechAccumulatorRef.current = (
+                manualSpeechAccumulatorRef.current + " " + final.trim()
+              ).trim();
+            }
+            const currentDisplay = (manualSpeechAccumulatorRef.current + " " + interim).trim();
+            setLiveTranscript(currentDisplay);
+          };
+          rec.onerror = (e: any) => {
+            console.warn("[Voice-Input] Manual web speech listener event:", e.error);
+          };
+          rec.start();
+          manualRecognitionRef.current = rec;
+        } catch (err) {
+          console.warn("[Voice-Input] Could not initialize parallel web speech:", err);
+        }
+      }
+    }
 
     try {
       const mediaRecorder = new MediaRecorder(stream);
@@ -200,10 +247,20 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         stopVolumeVisualizer(); // this also stops the tracks
 
+        const webSpeechFallback = (
+          manualSpeechAccumulatorRef.current || liveTranscript
+        ).trim();
+
         if (audioChunksRef.current.length === 0 || audioBlob.size === 0) {
+          if (webSpeechFallback && webSpeechFallback.length > 0) {
+            console.log(`[Voice-Input] Using Web Speech transcript directly: "${webSpeechFallback}"`);
+            setLiveTranscript("");
+            sendMessage(webSpeechFallback);
+            return;
+          }
           setAIState("idle");
           return;
         }
@@ -211,48 +268,85 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
         setIsProcessingAudio(true);
 
         try {
-          const formData = new FormData();
-          formData.append("file", audioBlob, "audio.webm");
-          const res = await fetch(`/api/interviews/${interviewId}/stt`, {
-            method: "POST",
-            body: formData,
-          });
+          let transcribedText = "";
 
-          if (res.ok) {
-            const data = await res.json();
-            if (data.text && data.text.trim().length > 0) {
-              console.log(`[Voice-Input] ✅ STT transcribed candidate speech: "${data.text.trim()}". Sending to chat...`);
-              sendMessage(data.text.trim());
+          // Attempt backend STT API
+          try {
+            const formData = new FormData();
+            formData.append("file", audioBlob, "audio.webm");
+            const res = await fetch(`/api/interviews/${interviewId}/stt`, {
+              method: "POST",
+              body: formData,
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              if (data.text && data.text.trim().length > 0) {
+                transcribedText = data.text.trim();
+                console.log(`[Voice-Input] ✅ STT API transcribed: "${transcribedText}"`);
+              }
             } else {
-              console.warn("[Voice-Input] ⚠️ STT returned empty transcription (no speech detected)");
-              setErrorMessage("No clear speech detected. Please try recording again.");
-              setAIState("idle");
+              const err = await res.text();
+              console.warn(
+                "[Voice-Input] ⚠️ STT API returned error. Falling back to Web Speech STT:",
+                res.status,
+                err
+              );
             }
+          } catch (apiErr) {
+            console.warn(
+              "[Voice-Input] ⚠️ STT API network failure. Falling back to Web Speech STT:",
+              apiErr
+            );
+          }
+
+          // Use API transcript if successful; otherwise gracefully use Web Speech STT!
+          const finalText = transcribedText || webSpeechFallback;
+
+          if (finalText && finalText.length > 0) {
+            console.log(`[Voice-Input] ✅ Speech resolved: "${finalText}"`);
+            setErrorMessage(null);
+            setLiveTranscript("");
+            sendMessage(finalText);
           } else {
-            const err = await res.text();
-            setErrorMessage("STT Failed (Backend Error)");
-            console.error("STT endpoint error:", err);
+            console.warn("[Voice-Input] ⚠️ No speech captured by either API or Web Speech");
+            setErrorMessage("No clear speech detected. Please check your mic and speak again.");
             setAIState("idle");
           }
         } catch (e: any) {
-          setErrorMessage(`Network error: ${e.message}`);
-          setAIState("idle");
+          if (webSpeechFallback && webSpeechFallback.length > 0) {
+            console.log(
+              `[Voice-Input] ✅ Error handler fallback to Web Speech: "${webSpeechFallback}"`
+            );
+            setErrorMessage(null);
+            setLiveTranscript("");
+            sendMessage(webSpeechFallback);
+          } else {
+            setErrorMessage(`Speech recognition error: ${e.message}`);
+            setAIState("idle");
+          }
         } finally {
           setIsProcessingAudio(false);
+          setLiveTranscript("");
         }
       };
 
       mediaRecorder.start();
       setIsManualRecording(true);
       setAIState("listening");
-
     } catch (e: any) {
       setErrorMessage(e.message);
     }
   };
 
   const stopManualRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+    if (manualRecognitionRef.current) {
+      try {
+        manualRecognitionRef.current.stop();
+      } catch {}
+      manualRecognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
       setIsManualRecording(false);
     }
@@ -284,6 +378,7 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
       silenceTimeoutRef.current = setTimeout(() => {
         const textToSend = speechAccumulatorRef.current.trim();
         speechAccumulatorRef.current = "";
+        setLiveTranscript("");
         if (textToSend.length >= 2) {
           sendMessage(textToSend);
         }
@@ -295,18 +390,24 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
   const { isListening, isSupported, startListening, stopListening } =
     useWebSpeech({
       onResult: handleSpeechResult,
+      onInterimResult: (interim) => {
+        if (voiceInputMode === "auto" && interim.trim()) {
+          setLiveTranscript(interim.trim());
+        }
+      },
       onError: (error) => {
         console.error("Speech error:", error);
         if (error === "not-allowed") {
-          setErrorMessage("Microphone permission blocked.");
+          setErrorMessage("Microphone permission blocked. Please allow mic access in your browser.");
         } else if (error === "network") {
           setErrorMessage("Network error: Chrome STT requires active internet.");
-        } else {
+        } else if (error !== "no-speech" && error !== "aborted") {
           setErrorMessage(`Speech Error: ${error}`);
         }
       },
       continuous: true,
-      language: sttLanguage,
+      interimResults: true,
+      language: sttLanguage || "en-IN",
     });
 
   // ─── Derived State ─────────────────────────────
@@ -505,7 +606,7 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
 
       <div className="flex flex-col items-center">
         <span className="text-sm font-medium text-foreground">
-          {isProcessingAudio ? "Transcribing..." : isGenerating
+          {isProcessingAudio ? "Transcribing speech..." : isGenerating
             ? "Stop Generating"
             : isActive
               ? voiceInputMode === "manual" ? "Recording... (Tap to Send)" : "Listening..."
@@ -513,9 +614,18 @@ export function VoiceInput({ sendMessage, stopGeneration }: VoiceInputProps) {
                 ? "AI is speaking..."
                 : voiceInputMode === "manual" ? "Tap to Record" : (isMicMuted ? "Mic is Off" : "Tap to mute")}
         </span>
+
+        {/* Live speech feedback badge */}
+        {isActive && liveTranscript && (
+          <div className="mt-2 flex items-center gap-1.5 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full max-w-[320px] text-[11px] text-primary">
+            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="truncate italic">&quot;{liveTranscript}&quot;</span>
+          </div>
+        )}
+
         {voiceInputMode === "manual" && !isActive && !isGenerating && (
            <span className="text-[10px] text-muted-foreground mt-1">
-             Your audio is sent securely.
+             Hybrid Speech: Uses AI Whisper + Browser Web Speech fallback.
            </span>
         )}
       </div>

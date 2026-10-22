@@ -16,22 +16,44 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { extractSkillsFromResumeText } from "@/lib/profile/skills-extractor";
 
+export interface ParsedResumePayload {
+  fileName: string;
+  fileSize: number;
+  pageCount: number;
+  text: string;
+  detectedSkills: string[];
+  detectedLinks: {
+    github?: string;
+    linkedin?: string;
+    leetcode?: string;
+    others: string[];
+  };
+  aiExtracted?: {
+    targetRole?: string;
+    githubUsername?: string;
+    leetcodeUsername?: string;
+    linkedinUrl?: string;
+    skills?: string[];
+    projects?: Array<{
+      title: string;
+      description?: string;
+      repoUrl?: string;
+      liveUrl?: string;
+      techStack?: string[];
+    }>;
+    achievements?: Array<{
+      title: string;
+      category?: string;
+      description?: string;
+      date?: string;
+    }>;
+  };
+}
+
 interface ResumeDropzoneProps {
   currentFileName?: string | null;
   currentPageCount?: number | null;
-  onParsedSuccess: (data: {
-    fileName: string;
-    fileSize: number;
-    pageCount: number;
-    text: string;
-    detectedSkills: string[];
-    detectedLinks: {
-      github?: string;
-      linkedin?: string;
-      leetcode?: string;
-      others: string[];
-    };
-  }) => void;
+  onParsedSuccess: (data: ParsedResumePayload) => void;
   onRemoveResume: () => void;
   onAddSkills: (skills: string[]) => void;
   detectedSkillsPool: string[];
@@ -50,7 +72,7 @@ export function ResumeDropzone({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Client-side stream text extractor with pdfjs-dist primary and byte regex fallback
+  // Client-side fallback text extractor for PDFs only
   const extractClientSidePdf = async (file: File) => {
     let text = "";
     let pageCount = 1;
@@ -194,27 +216,31 @@ export function ResumeDropzone({
   const validateAndUpload = async (file: File) => {
     setUploadError(null);
 
-    // 1. Client-side format validation
+    const lowerName = file.name.toLowerCase();
     const isPdf =
       file.type === "application/pdf" ||
-      file.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf) {
-      const err = "Only PDF resumes are supported. Please upload a .pdf file.";
+      lowerName.endsWith(".pdf");
+    const isDocx =
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      lowerName.endsWith(".docx") ||
+      lowerName.endsWith(".doc");
+
+    if (!isPdf && !isDocx) {
+      const err = "Only PDF (.pdf) and Word (.docx) resumes are supported. Please upload a .pdf or .docx file.";
       setUploadError(err);
       toast.error(err);
       return;
     }
 
-    // 2. Client-side size validation (5MB max)
+    // Client-side size validation (5MB max)
     const MAX_SIZE = 5 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      const err = "File size exceeds the 5MB limit. Please upload a smaller PDF.";
+      const err = "File size exceeds the 5MB limit. Please upload a smaller file.";
       setUploadError(err);
       toast.error(err);
       return;
     }
 
-    // 3. Network upload to parser endpoint
     setIsUploading(true);
     const formData = new FormData();
     formData.append("file", file);
@@ -232,14 +258,17 @@ export function ResumeDropzone({
         data = await res.json();
       }
 
-      // If server parsed successfully with extracted text
       if (data && data.success && data.text && data.text.length > 20) {
         const skillsCount = data.detectedSkills?.length || 0;
-        toast.success(
-          skillsCount > 0
-            ? `Resume parsed! Extracted ${skillsCount} skills.`
-            : `Resume parsed! You can add or customize your skills below.`
-        );
+        const projectsCount = data.aiExtracted?.projects?.length || 0;
+        const achievementsCount = data.aiExtracted?.achievements?.length || 0;
+
+        let msg = `Resume parsed! Extracted ${skillsCount} skills`;
+        if (projectsCount > 0) msg += `, ${projectsCount} projects`;
+        if (achievementsCount > 0) msg += `, ${achievementsCount} achievements`;
+        msg += ".";
+
+        toast.success(msg);
 
         onParsedSuccess({
           fileName: data.fileName || file.name,
@@ -248,41 +277,18 @@ export function ResumeDropzone({
           text: data.text,
           detectedSkills: data.detectedSkills || [],
           detectedLinks: data.detectedLinks || { others: [] },
+          aiExtracted: data.aiExtracted || undefined,
         });
         return;
       }
 
-      // If server returned non-JSON (like an HTML redirect/error) or failed, trigger client fallback
-      const clientFallback = await extractClientSidePdf(file);
-      if (clientFallback.text && clientFallback.text.length > 20) {
-        const skillsCount = clientFallback.detectedSkills.length;
-        toast.success(
-          skillsCount > 0
-            ? `Resume parsed! Extracted ${skillsCount} skills.`
-            : `Resume parsed! You can add or customize your skills below.`
-        );
-
-        onParsedSuccess({
-          fileName: file.name,
-          fileSize: file.size,
-          pageCount: clientFallback.pageCount,
-          text: clientFallback.text,
-          detectedSkills: clientFallback.detectedSkills,
-          detectedLinks: clientFallback.detectedLinks,
-        });
-        return;
+      // If server returned error for DOCX, throw it
+      if (isDocx && (!data || !data.success)) {
+        throw new Error(data?.error || "Could not parse DOCX resume.");
       }
 
-      if (data && data.error) {
-        throw new Error(data.error);
-      }
-
-      throw new Error(
-        "Could not extract readable text from this PDF. Please make sure it contains selectable text rather than a scanned image."
-      );
-    } catch (err: unknown) {
-      // Try client extraction one last time in case network threw
-      try {
+      // If server failed on PDF, trigger client PDF fallback
+      if (isPdf) {
         const clientFallback = await extractClientSidePdf(file);
         if (clientFallback.text && clientFallback.text.length > 20) {
           const skillsCount = clientFallback.detectedSkills.length;
@@ -291,6 +297,7 @@ export function ResumeDropzone({
               ? `Resume parsed! Extracted ${skillsCount} skills.`
               : `Resume parsed! You can add or customize your skills below.`
           );
+
           onParsedSuccess({
             fileName: file.name,
             fileSize: file.size,
@@ -301,7 +308,38 @@ export function ResumeDropzone({
           });
           return;
         }
-      } catch {}
+      }
+
+      if (data && data.error) {
+        throw new Error(data.error);
+      }
+
+      throw new Error(
+        "Could not extract readable text from this document. Please ensure it contains selectable text."
+      );
+    } catch (err: unknown) {
+      if (isPdf) {
+        try {
+          const clientFallback = await extractClientSidePdf(file);
+          if (clientFallback.text && clientFallback.text.length > 20) {
+            const skillsCount = clientFallback.detectedSkills.length;
+            toast.success(
+              skillsCount > 0
+                ? `Resume parsed! Extracted ${skillsCount} skills.`
+                : `Resume parsed! You can add or customize your skills below.`
+            );
+            onParsedSuccess({
+              fileName: file.name,
+              fileSize: file.size,
+              pageCount: clientFallback.pageCount,
+              text: clientFallback.text,
+              detectedSkills: clientFallback.detectedSkills,
+              detectedLinks: clientFallback.detectedLinks,
+            });
+            return;
+          }
+        } catch {}
+      }
 
       const message =
         err instanceof Error ? err.message : "Failed to upload and parse resume.";
@@ -350,7 +388,7 @@ export function ResumeDropzone({
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf"
+        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -371,9 +409,9 @@ export function ResumeDropzone({
           <div className="flex flex-col items-center gap-3 py-4">
             <Loader2 className="size-8 animate-spin text-primary" />
             <div>
-              <p className="text-sm font-medium">Extracting resume data...</p>
+              <p className="text-sm font-semibold text-foreground">AI Extracting Resume Data...</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Scanning text, detecting skills and candidate links
+                Analyzing Technical Skills, Projects & Architectures, and Achievements via AI Copilot
               </p>
             </div>
           </div>
@@ -390,14 +428,14 @@ export function ResumeDropzone({
                   </span>
                   <Badge variant="success" className="gap-1 text-[11px] py-0">
                     <CheckCircle2 className="size-3" />
-                    Parsed
+                    AI Parsed
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {currentPageCount
                     ? `${currentPageCount} page${currentPageCount > 1 ? "s" : ""} • `
                     : ""}
-                  Click or drag another file to replace
+                  Click or drag another file (.pdf or .docx) to replace
                 </p>
               </div>
             </div>
@@ -423,13 +461,13 @@ export function ResumeDropzone({
             </div>
             <div>
               <p className="text-sm font-medium">
-                Drag and drop your PDF resume, or{" "}
+                Drag and drop your PDF or DOCX resume, or{" "}
                 <span className="text-primary font-semibold hover:underline">
                   browse files
                 </span>
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Supports PDF format up to 5 MB
+                Supports PDF and DOCX formats up to 5 MB
               </p>
             </div>
           </div>
