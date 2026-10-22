@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 
@@ -12,7 +13,7 @@ const BOOTSTRAP_ADMIN_EMAILS = [
  * Authenticated dynamically via PostgreSQL database role ("staff" | "admin"),
  * with bootstrap fallback to super-admin email.
  */
-export async function authorizeStaff(): Promise<boolean> {
+export const authorizeStaff = cache(async function authorizeStaff(): Promise<boolean> {
   if (!process.env.CLERK_SECRET_KEY && process.env.NODE_ENV === "development") {
     return true;
   }
@@ -48,12 +49,12 @@ export async function authorizeStaff(): Promise<boolean> {
     console.warn("authorizeStaff warning:", error);
     return false;
   }
-}
+});
 
 /**
  * Checks if current user is a Super Admin.
  */
-export async function authorizeAdmin(): Promise<boolean> {
+export const authorizeAdmin = cache(async function authorizeAdmin(): Promise<boolean> {
   if (!process.env.CLERK_SECRET_KEY && process.env.NODE_ENV === "development") {
     return true;
   }
@@ -87,12 +88,12 @@ export async function authorizeAdmin(): Promise<boolean> {
     console.warn("authorizeAdmin warning:", error);
     return false;
   }
-}
+});
 
 /**
  * Returns current authenticated user's database role: "student" | "staff" | "admin" | null
  */
-export async function getCurrentUserRole(): Promise<"student" | "staff" | "admin" | null> {
+export const getCurrentUserRole = cache(async function getCurrentUserRole(): Promise<"student" | "staff" | "admin" | null> {
   try {
     const { userId } = await auth();
     if (!userId) return null;
@@ -119,4 +120,4 @@ export async function getCurrentUserRole(): Promise<"student" | "staff" | "admin
   } catch {
     return null;
   }
-}
+});

@@ -44,24 +44,28 @@ export default async function DashboardLayout({
           <nav className="flex items-center gap-3 text-xs sm:text-sm font-medium">
             <Link
               href="/dashboard"
+              prefetch={true}
               className="text-muted-foreground hover:text-foreground transition-colors font-semibold"
             >
               Mock Interview
             </Link>
             <Link
               href="/dashboard/profile-intake"
+              prefetch={true}
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Profile & Review
             </Link>
             <Link
               href="/dashboard/readiness"
+              prefetch={true}
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Readiness Score
             </Link>
             <Link
               href="/dashboard/jobs"
+              prefetch={true}
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               Jobs & Drives
@@ -69,6 +73,7 @@ export default async function DashboardLayout({
             {isStaff && !isAdmin && (
               <Link
                 href="/admin/jobs"
+                prefetch={true}
                 className="text-primary font-semibold hover:underline transition-colors"
               >
                 MSOT Staff Board
@@ -77,6 +82,7 @@ export default async function DashboardLayout({
             {isAdmin && (
               <Link
                 href="/admin"
+                prefetch={true}
                 className="text-amber-600 dark:text-amber-400 font-semibold hover:underline transition-colors"
               >
                 Admin

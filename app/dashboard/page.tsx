@@ -28,70 +28,67 @@ export default async function DashboardPage() {
   } | null = null;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { clerkId },
-      select: { id: true },
-    });
+    // Run all database queries concurrently in a single network round-trip via user relation
+    const [userWithProfile, historyInterviews, recentInterviews, totalCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { clerkId },
+        select: {
+          id: true,
+          studentProfile: {
+            select: {
+              targetRole: true,
+              resumeFileName: true,
+              readinessScore: {
+                select: { overallScore: true, tier: true },
+              },
+            },
+          },
+        },
+      }),
+      prisma.interview.findMany({
+        where: {
+          user: { clerkId },
+          report: { isNot: null },
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          createdAt: true,
+          report: {
+            select: { overallScore: true },
+          },
+        },
+        take: 100,
+      }),
+      prisma.interview.findMany({
+        where: { user: { clerkId } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          language: true,
+          difficulty: true,
+          duration: true,
+          status: true,
+          problemTitle: true,
+          startedAt: true,
+          endedAt: true,
+          createdAt: true,
+          report: {
+            select: { overallScore: true },
+          },
+        },
+        take: 20,
+      }),
+      prisma.interview.count({
+        where: { user: { clerkId } },
+      }),
+    ]);
 
-    if (user) {
-      // Fetch historical completed interviews with reports, total counts, and student profile
-      const [historyInterviews, recentInterviews, totalCount, profileRecord] = await Promise.all([
-        prisma.interview.findMany({
-          where: {
-            userId: user.id,
-            report: { isNot: null },
-          },
-          orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            createdAt: true,
-            report: {
-              select: { overallScore: true },
-            },
-          },
-          take: 100,
-        }),
-        prisma.interview.findMany({
-          where: { userId: user.id },
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            language: true,
-            difficulty: true,
-            duration: true,
-            status: true,
-            problemTitle: true,
-            startedAt: true,
-            endedAt: true,
-            createdAt: true,
-            report: {
-              select: { overallScore: true },
-            },
-          },
-          take: 20,
-        }),
-        prisma.interview.count({
-          where: { userId: user.id },
-        }),
-        prisma.studentProfile.findUnique({
-          where: { userId: user.id },
-          select: {
-            targetRole: true,
-            resumeFileName: true,
-            readinessScore: {
-              select: { overallScore: true, tier: true },
-            },
-          },
-        }),
-      ]);
-
-      chartInterviews = historyInterviews;
-      initialInterviews = recentInterviews;
-      totalInterviews = totalCount;
-      studentProfile = profileRecord;
-    }
+    chartInterviews = historyInterviews;
+    initialInterviews = recentInterviews;
+    totalInterviews = totalCount;
+    studentProfile = userWithProfile?.studentProfile || null;
   } catch {
-    // Database not connected or loading error — fallback to empty state
     console.log("Database not available — showing empty state");
   }
 
@@ -138,6 +135,7 @@ export default async function DashboardPage() {
           </div>
           <Link
             href="/dashboard/profile-intake"
+            prefetch={true}
             className="text-xs font-semibold text-primary hover:underline shrink-0"
           >
             Profile & Review Hub &rarr;
@@ -157,6 +155,7 @@ export default async function DashboardPage() {
           </div>
           <Link
             href="/dashboard/profile-intake"
+            prefetch={true}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shrink-0"
           >
             <span>Complete Profile & Review</span>
@@ -168,6 +167,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <Link
           href="/dashboard/profile-intake"
+          prefetch={true}
           className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
         >
           <span className="text-[10px] font-semibold text-primary uppercase tracking-wider block mb-1">
@@ -198,6 +198,7 @@ export default async function DashboardPage() {
 
         <Link
           href="/dashboard/readiness"
+          prefetch={true}
           className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
         >
           <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider block mb-1">
@@ -213,6 +214,7 @@ export default async function DashboardPage() {
 
         <Link
           href="/dashboard/jobs"
+          prefetch={true}
           className="group rounded-xl border border-border bg-card p-3.5 hover:border-primary/40 hover:bg-muted/40 transition-all flex flex-col justify-between"
         >
           <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider block mb-1">
