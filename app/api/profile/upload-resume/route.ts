@@ -1,18 +1,21 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-user";
 import { parseResumePdf } from "@/lib/profile/pdf-parser";
+import { parseResumeDocx } from "@/lib/profile/docx-parser";
+import { extractResumeDataWithAi } from "@/lib/profile/ai-resume-extractor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30; // 30s timeout
+export const maxDuration = 60; // 60s timeout for AI analysis
 
 /**
- * Ingests a PDF resume, parses its text, detects links and skills,
- * and returns the extracted information in memory.
+ * Ingests a PDF or DOCX resume, parses its text, detects links and skills,
+ * runs AI-powered information extraction (OpenRouter/DeepSeek/Groq),
+ * and returns structured data to auto-fill the candidate's profile.
  */
 export async function POST(req: Request) {
   try {
-    // Attempt authentication check without blocking client-side parsing
+    // Attempt authentication check without blocking parsing
     const user = await getAuthenticatedUser().catch(() => null);
 
     const formData = await req.formData();
@@ -25,15 +28,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate file type
+    const lowerName = file.name.toLowerCase();
     const isPdf =
       file.type === "application/pdf" ||
-      file.name.toLowerCase().endsWith(".pdf");
-    if (!isPdf) {
+      lowerName.endsWith(".pdf");
+    const isDocx =
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      lowerName.endsWith(".docx") ||
+      lowerName.endsWith(".doc");
+
+    if (!isPdf && !isDocx) {
       return NextResponse.json(
         {
           success: false,
-          error: "Only PDF format is supported currently. Please upload a .pdf file.",
+          error: "Only PDF (.pdf) and Word (.docx) formats are supported. Please upload a .pdf or .docx file.",
         },
         { status: 400 }
       );
@@ -45,7 +53,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          error: "Resume file size exceeds the 5MB limit. Please upload a smaller PDF.",
+          error: "Resume file size exceeds the 5MB limit. Please upload a smaller file.",
         },
         { status: 400 }
       );
@@ -54,7 +62,28 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const parsed = await parseResumePdf(buffer);
+    let parsed;
+    if (isDocx) {
+      parsed = await parseResumeDocx(buffer);
+    } else {
+      parsed = await parseResumePdf(buffer);
+    }
+
+    // Run AI-powered extraction for skills, projects, achievements, and profile handles
+    let aiExtracted = null;
+    if (parsed.text && parsed.text.length >= 40) {
+      try {
+        aiExtracted = await extractResumeDataWithAi(parsed.text);
+      } catch (aiErr) {
+        console.warn("AI extraction encountered an error, falling back to regex:", aiErr);
+      }
+    }
+
+    // Merge regex detected skills with AI detected skills to avoid missing any
+    const allSkillsSet = new Set<string>(parsed.detectedSkills || []);
+    if (aiExtracted?.skills && Array.isArray(aiExtracted.skills)) {
+      aiExtracted.skills.forEach((s) => allSkillsSet.add(s));
+    }
 
     return NextResponse.json({
       success: true,
@@ -62,8 +91,9 @@ export async function POST(req: Request) {
       fileSize: file.size,
       pageCount: parsed.pageCount,
       text: parsed.text,
-      detectedSkills: parsed.detectedSkills,
+      detectedSkills: Array.from(allSkillsSet),
       detectedLinks: parsed.detectedLinks,
+      aiExtracted: aiExtracted || undefined,
       userId: user?.id || null,
     });
   } catch (error: any) {
@@ -71,7 +101,9 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed to parse PDF resume. Please ensure the file is not corrupted or password-protected.",
+        error:
+          error.message ||
+          "Failed to parse resume. Please ensure the file is not corrupted or password-protected.",
       },
       { status: 400 }
     );

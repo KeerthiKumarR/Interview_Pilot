@@ -35,7 +35,10 @@ import {
   ChatIntakeAssistant,
   type ExtractedProfileData,
 } from "@/features/profile/components/chat-intake-assistant";
-import { ResumeDropzone } from "@/features/profile/components/resume-dropzone";
+import {
+  ResumeDropzone,
+  type ParsedResumePayload,
+} from "@/features/profile/components/resume-dropzone";
 import { SocialLinksForm } from "@/features/profile/components/social-links-form";
 import { SkillsInput } from "@/features/profile/components/skills-input";
 import { ProjectsSection } from "@/features/profile/components/projects-section";
@@ -298,19 +301,7 @@ function ProfileIntakeMain() {
 
   // 2. Handle Resume Parsing Results
   const handleResumeParsed = useCallback(
-    (parsed: {
-      fileName: string;
-      fileSize: number;
-      pageCount: number;
-      text: string;
-      detectedSkills: string[];
-      detectedLinks: {
-        github?: string;
-        linkedin?: string;
-        leetcode?: string;
-        others: string[];
-      };
-    }) => {
+    (parsed: ParsedResumePayload) => {
       setResumeFileName(parsed.fileName);
       setResumePageCount(parsed.pageCount);
       setResumeText(parsed.text);
@@ -332,8 +323,87 @@ function ProfileIntakeMain() {
       if (parsed.detectedLinks.linkedin && !linkedinUrl) {
         setLinkedinUrl(parsed.detectedLinks.linkedin);
       }
+
+      // ─── AI Auto-fill: 3. Skills Cloud, 4. Highlighted Projects, 5. Achievements ───
+      if (parsed.aiExtracted) {
+        const ext = parsed.aiExtracted;
+
+        // Auto-fill target role if detected and currently default
+        if (ext.targetRole && (!targetRole || targetRole === "Full Stack Developer")) {
+          setTargetRole(ext.targetRole);
+        }
+
+        // Auto-fill social links from AI extraction if still empty
+        if (ext.githubUsername && !githubUsername) {
+          setGithubUsername(ext.githubUsername);
+        }
+        if (ext.leetcodeUsername && !leetcodeUsername) {
+          setLeetcodeUsername(ext.leetcodeUsername);
+        }
+        if (ext.linkedinUrl && !linkedinUrl) {
+          setLinkedinUrl(ext.linkedinUrl);
+        }
+
+        // Auto-fill 3. Technical Skills Cloud
+        if (Array.isArray(ext.skills) && ext.skills.length > 0) {
+          setSkills((prev) => {
+            const next = [...prev];
+            for (const s of ext.skills || []) {
+              if (!next.some((item) => item.toLowerCase() === s.toLowerCase())) {
+                next.push(s);
+              }
+            }
+            return next;
+          });
+        }
+
+        // Auto-fill 4. Highlighted Projects & Architectures
+        if (Array.isArray(ext.projects) && ext.projects.length > 0) {
+          setProjects((prev) => {
+            const existingTitles = new Set(prev.map((p) => p.title.toLowerCase()));
+            const newOnes: StudentProjectData[] = (ext.projects || [])
+              .filter((p) => p.title && !existingTitles.has(p.title.toLowerCase()))
+              .map((p, idx) => ({
+                title: p.title,
+                description: p.description,
+                repoUrl: p.repoUrl,
+                liveUrl: p.liveUrl,
+                techStack: p.techStack || [],
+                order: prev.length + idx + 1,
+              }));
+            return [...prev, ...newOnes];
+          });
+        }
+
+        // Auto-fill 5. Achievements & Certifications
+        if (Array.isArray(ext.achievements) && ext.achievements.length > 0) {
+          setAchievements((prev) => {
+            const existingTitles = new Set(prev.map((a) => a.title.toLowerCase()));
+            const validCategories = ["hackathon", "certification", "club", "award", "other"] as const;
+            type AchCategory = (typeof validCategories)[number];
+
+            const newOnes: StudentAchievementData[] = (ext.achievements || [])
+              .filter((a) => a.title && !existingTitles.has(a.title.toLowerCase()))
+              .map((a) => {
+                const rawCat = (a.category || "").toLowerCase() as AchCategory;
+                const category: AchCategory = validCategories.includes(rawCat) ? rawCat : "other";
+                return {
+                  title: a.title,
+                  category,
+                  description: a.description,
+                  date: a.date,
+                };
+              });
+            return [...prev, ...newOnes];
+          });
+        }
+
+        toast.success(
+          "AI automatically populated your Technical Skills Cloud, Projects, and Achievements!"
+        );
+      }
     },
-    [githubUsername, leetcodeUsername, linkedinUrl]
+    [githubUsername, leetcodeUsername, linkedinUrl, targetRole]
   );
 
   const handleRemoveResume = useCallback(() => {
@@ -643,7 +713,7 @@ function ProfileIntakeMain() {
                     1. Resume Intake & Auto-Parser
                   </CardTitle>
                   <CardDescription>
-                    Drop your PDF resume for client parsing and automatic skill extraction.
+                    Drop your PDF or DOCX resume for AI-powered data extraction and interview readiness.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

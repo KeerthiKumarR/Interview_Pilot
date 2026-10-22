@@ -134,14 +134,20 @@ export function useWebSpeech({
         return;
       }
 
-      // Auto-restart for continuous listening
-      try {
-        recognition.start();
-      } catch {
-        // start() can throw if the recognition is in a bad state
-        setIsListening(false);
-        stoppedRef.current = true;
-      }
+      // Auto-restart for continuous listening with safe debounce
+      setTimeout(() => {
+        if (!stoppedRef.current && sessionIdRef.current === mySession) {
+          try {
+            recognition.start();
+            setIsListening(true);
+          } catch {
+            // If Chrome has put the instance into a non-restartable state, spin up a fresh one
+            if (!stoppedRef.current) {
+              startListening();
+            }
+          }
+        }
+      }, 120);
     };
 
     recognitionRef.current = recognition;

@@ -101,13 +101,13 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: "Speech-to-text service unavailable" },
+      { error: "Speech-to-text service unavailable", fallbackToWebSpeech: true },
       { status: 502 }
     );
   } catch (error) {
     console.error("Error in STT route:", error);
     return NextResponse.json(
-      { error: "Failed to process audio" },
+      { error: "Failed to process audio", fallbackToWebSpeech: true },
       { status: 500 }
     );
   }
