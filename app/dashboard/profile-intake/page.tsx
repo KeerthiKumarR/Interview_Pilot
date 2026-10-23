@@ -21,7 +21,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
-import { invalidateCache, readCache, writeCache } from "@/lib/client-cache";
+import { invalidateCache, readCache, writeCache, getCacheTimestamp } from "@/lib/client-cache";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -93,34 +93,40 @@ function ProfileIntakeMain() {
     tabParam === "review" ? "review" : "profile"
   );
 
-  const [isLoading, setIsLoading] = useState(true);
+  // Synchronous cache read for instantaneous 0ms frame-0 render
+  const initialProfile = typeof window !== "undefined" ? readCache<{ profile: any }>("/api/profile")?.profile || null : null;
+  const initialReview = typeof window !== "undefined" ? readCache<{ review: ReviewData | null; readinessScore: ReadinessScoreData | null }>("/api/review") : null;
+
+  const [isLoading, setIsLoading] = useState(() => !initialProfile);
   const [isSaving, setIsSaving] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(() =>
+    initialProfile?.updatedAt ? new Date(initialProfile.updatedAt) : null
+  );
 
-  // Profile Form States
-  const [targetRole, setTargetRole] = useState("Full Stack Developer");
-  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
-  const [resumeText, setResumeText] = useState<string | null>(null);
-  const [resumePageCount, setResumePageCount] = useState<number | null>(null);
+  // Profile Form States initialized directly from cache
+  const [targetRole, setTargetRole] = useState(() => initialProfile?.targetRole || "Full Stack Developer");
+  const [resumeFileName, setResumeFileName] = useState<string | null>(() => initialProfile?.resumeFileName || null);
+  const [resumeText, setResumeText] = useState<string | null>(() => initialProfile?.resumeText || null);
+  const [resumePageCount, setResumePageCount] = useState<number | null>(() => initialProfile?.resumePageCount || null);
 
-  const [githubUsername, setGithubUsername] = useState("");
-  const [leetcodeUsername, setLeetcodeUsername] = useState("");
-  const [linkedinUrl, setLinkedinUrl] = useState("");
-  const [linkedinAbout, setLinkedinAbout] = useState("");
+  const [githubUsername, setGithubUsername] = useState(() => initialProfile?.githubUsername || "");
+  const [leetcodeUsername, setLeetcodeUsername] = useState(() => initialProfile?.leetcodeUsername || "");
+  const [linkedinUrl, setLinkedinUrl] = useState(() => initialProfile?.linkedinUrl || "");
+  const [linkedinAbout, setLinkedinAbout] = useState(() => initialProfile?.linkedinAbout || "");
 
-  const [skills, setSkills] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>(() => initialProfile?.skills || []);
   const [detectedSkillsPool, setDetectedSkillsPool] = useState<string[]>([]);
 
-  const [projects, setProjects] = useState<StudentProjectData[]>([]);
-  const [achievements, setAchievements] = useState<StudentAchievementData[]>([]);
+  const [projects, setProjects] = useState<StudentProjectData[]>(() => initialProfile?.projects || []);
+  const [achievements, setAchievements] = useState<StudentAchievementData[]>(() => initialProfile?.achievements || []);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showChatAssistant, setShowChatAssistant] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Review Engine States
-  const [review, setReview] = useState<ReviewData | null>(null);
-  const [readinessScore, setReadinessScore] = useState<ReadinessScoreData | null>(null);
+  // Review Engine States initialized directly from cache
+  const [review, setReview] = useState<ReviewData | null>(() => initialReview?.review || null);
+  const [readinessScore, setReadinessScore] = useState<ReadinessScoreData | null>(() => initialReview?.readinessScore || null);
   const [isRunningReview, setIsRunningReview] = useState(false);
 
   // Apply extracted data from Chat Intake Assistant
@@ -222,68 +228,67 @@ function ProfileIntakeMain() {
   };
 
   // 1. Fetch profile & review data on mount (with 0ms Stale-While-Revalidate hydration)
+  // State is already initialized from cache via lazy initializers above.
+  // This effect only fires a background revalidation if data is stale (> 3 min).
   useEffect(() => {
     let isMounted = true;
+    const FRESH_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+    const now = Date.now();
 
-    // Fast synchronous cache read: eliminates skeleton if data is already cached
-    const cachedProfile = readCache<{ profile: any }>("/api/profile");
-    const cachedReview = readCache<{ review: ReviewData | null; readinessScore: ReadinessScoreData | null }>("/api/review");
+    const profileAge = now - getCacheTimestamp("/api/profile");
+    const reviewAge = now - getCacheTimestamp("/api/review");
 
-    if (cachedProfile?.profile) {
-      const p = cachedProfile.profile;
-      if (p.targetRole) setTargetRole(p.targetRole);
-      if (p.resumeFileName) setResumeFileName(p.resumeFileName);
-      if (p.resumeText) setResumeText(p.resumeText);
-      if (p.resumePageCount) setResumePageCount(p.resumePageCount);
-      if (p.githubUsername) setGithubUsername(p.githubUsername);
-      if (p.leetcodeUsername) setLeetcodeUsername(p.leetcodeUsername);
-      if (p.linkedinUrl) setLinkedinUrl(p.linkedinUrl);
-      if (p.linkedinAbout) setLinkedinAbout(p.linkedinAbout);
-      if (p.skills && Array.isArray(p.skills)) setSkills(p.skills);
-      if (p.projects && Array.isArray(p.projects)) setProjects(p.projects);
-      if (p.achievements && Array.isArray(p.achievements)) setAchievements(p.achievements);
-      if (p.updatedAt) setLastSavedAt(new Date(p.updatedAt));
+    // If both caches are fresh, skip network entirely — instant 0ms render
+    if (profileAge < FRESH_THRESHOLD_MS && reviewAge < FRESH_THRESHOLD_MS) {
       setIsLoading(false);
+      return;
     }
 
-    if (cachedReview) {
-      if (cachedReview.review) setReview(cachedReview.review);
-      if (cachedReview.readinessScore) setReadinessScore(cachedReview.readinessScore);
-    }
-
-    async function loadInitialData() {
+    // Silent background revalidation — never set isLoading to true if we already have data
+    async function silentRevalidate() {
       try {
-        const [profileRes, reviewRes] = await Promise.all([
-          fetch("/api/profile"),
-          fetch("/api/review"),
-        ]);
+        const fetchProfile = profileAge >= FRESH_THRESHOLD_MS;
+        const fetchReview = reviewAge >= FRESH_THRESHOLD_MS;
 
-        if (profileRes.ok) {
-          const profileData = await profileRes.json();
-          writeCache("/api/profile", profileData);
-          if (isMounted && profileData.profile) {
-            const p = profileData.profile;
-            if (p.targetRole) setTargetRole(p.targetRole);
-            if (p.resumeFileName) setResumeFileName(p.resumeFileName);
-            if (p.resumeText) setResumeText(p.resumeText);
-            if (p.resumePageCount) setResumePageCount(p.resumePageCount);
-            if (p.githubUsername) setGithubUsername(p.githubUsername);
-            if (p.leetcodeUsername) setLeetcodeUsername(p.leetcodeUsername);
-            if (p.linkedinUrl) setLinkedinUrl(p.linkedinUrl);
-            if (p.linkedinAbout) setLinkedinAbout(p.linkedinAbout);
-            if (p.skills && Array.isArray(p.skills)) setSkills(p.skills);
-            if (p.projects && Array.isArray(p.projects)) setProjects(p.projects);
-            if (p.achievements && Array.isArray(p.achievements)) setAchievements(p.achievements);
-            if (p.updatedAt) setLastSavedAt(new Date(p.updatedAt));
+        const promises: Promise<Response>[] = [];
+        if (fetchProfile) promises.push(fetch("/api/profile"));
+        if (fetchReview) promises.push(fetch("/api/review"));
+
+        const results = await Promise.all(promises);
+        let resultIdx = 0;
+
+        if (fetchProfile) {
+          const profileRes = results[resultIdx++];
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            writeCache("/api/profile", profileData);
+            if (isMounted && profileData.profile) {
+              const p = profileData.profile;
+              if (p.targetRole) setTargetRole(p.targetRole);
+              if (p.resumeFileName) setResumeFileName(p.resumeFileName);
+              if (p.resumeText) setResumeText(p.resumeText);
+              if (p.resumePageCount) setResumePageCount(p.resumePageCount);
+              if (p.githubUsername) setGithubUsername(p.githubUsername);
+              if (p.leetcodeUsername) setLeetcodeUsername(p.leetcodeUsername);
+              if (p.linkedinUrl) setLinkedinUrl(p.linkedinUrl);
+              if (p.linkedinAbout) setLinkedinAbout(p.linkedinAbout);
+              if (p.skills && Array.isArray(p.skills)) setSkills(p.skills);
+              if (p.projects && Array.isArray(p.projects)) setProjects(p.projects);
+              if (p.achievements && Array.isArray(p.achievements)) setAchievements(p.achievements);
+              if (p.updatedAt) setLastSavedAt(new Date(p.updatedAt));
+            }
           }
         }
 
-        if (reviewRes.ok) {
-          const reviewData = await reviewRes.json();
-          writeCache("/api/review", reviewData);
-          if (isMounted) {
-            if (reviewData.review) setReview(reviewData.review);
-            if (reviewData.readinessScore) setReadinessScore(reviewData.readinessScore);
+        if (fetchReview) {
+          const reviewRes = results[resultIdx++];
+          if (reviewRes.ok) {
+            const reviewData = await reviewRes.json();
+            writeCache("/api/review", reviewData);
+            if (isMounted) {
+              if (reviewData.review) setReview(reviewData.review);
+              if (reviewData.readinessScore) setReadinessScore(reviewData.readinessScore);
+            }
           }
         }
       } catch (err) {
@@ -293,7 +298,7 @@ function ProfileIntakeMain() {
       }
     }
 
-    loadInitialData();
+    silentRevalidate();
     return () => {
       isMounted = false;
     };
