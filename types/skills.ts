@@ -155,17 +155,17 @@ export const REPORT_EVALUATOR_SKILLS: Record<string, ReportEvaluatorSkillDefinit
   executive_committee: {
     id: "executive_committee",
     name: "Executive Hiring Committee",
-    subtitle: "Definitive Hiring Verdict & Skill Scorecard",
+    subtitle: "Placement Readiness Verdict & Skill Scorecard",
     description:
-      "Produces a decisive 1-minute executive hiring scorecard for HR and hiring managers. Features clear hire recommendations, verbatim quotes, and skill match percentages.",
+      "Produces a decisive 1-minute placement readiness scorecard for students and mentors. Features clear readiness recommendations, verbatim quotes, and skill match percentages.",
     iconName: "Award",
-    badge: "Executive Hiring",
-    verdictFocus: "Strong Hire vs Hire vs Leaning No vs Do Not Hire with concrete executive rationale.",
+    badge: "Placement Readiness",
+    verdictFocus: "Placement Ready (Distinction) vs Placement Ready vs Needs Practice vs Needs Improvement with concrete growth rationale.",
     evaluationPhilosophy: `
 EVALUATION PHILOSOPHY — EXECUTIVE HIRING COMMITTEE:
-- Goal: Enable a hiring manager or HR recruiter to make a confident decision in under 60 seconds.
-- Provide a definitive 'recruiterVerdict': 'STRONG_HIRE', 'HIRE', 'LEANING_NO', or 'NO_HIRE'.
-- Generate an Executive Summary highlighting candidate strengths, key trade-offs, and risk factors.
+- Goal: Enable mentors, placement directors, and students to understand placement readiness in under 60 seconds.
+- Provide a definitive 'recruiterVerdict': 'STRONG_HIRE' (Placement Ready - Distinction), 'HIRE' (Placement Ready), 'LEANING_NO' (Needs Practice), or 'NO_HIRE' (Needs Improvement).
+- Generate an Executive Summary highlighting candidate strengths, key trade-offs, and priority growth areas.
 - Score target skills (e.g., Python, Architecture, Communication) on a 0-100 scale.
 - Include verbatim candidate quotes on subjective questions (e.g. career goals, ambition, teamwork).`,
   },

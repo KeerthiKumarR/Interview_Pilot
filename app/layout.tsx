@@ -54,8 +54,8 @@ export default function RootLayout({
         <ExtensionErrorSuppressor />
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="light"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <ClerkProvider appearance={{ theme: shadcn }}>

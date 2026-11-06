@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Sparkles, Globe } from "lucide-react";
+import { Sparkles, Globe, ArrowRight, MessageSquare, Code2, Layers, Award, CheckCircle2 } from "lucide-react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
-import { getAvailableVoices, type VoiceOption } from "@/hooks/use-web-speech";
+import { getAvailableVoices, STT_LANGUAGES, type VoiceOption } from "@/hooks/use-web-speech";
 import { speakTestBackend } from "@/hooks/use-tts";
 import { readCache, writeCache } from "@/lib/client-cache";
 
@@ -77,8 +77,18 @@ function playSpeakerTestChime() {
 
 export function InterviewLobby({
   onReady,
+  jobRole,
+  problemTitle,
+  problemDescription,
 }: {
   onReady: (style: string) => void;
+  jobRole?: {
+    id?: string;
+    title: string;
+    targetSkills?: string | null;
+  } | null;
+  problemTitle?: string;
+  problemDescription?: string;
 }) {
   const [micStatus, setMicStatus] = useState<"checking" | "ok" | "error">("checking");
   const [cameraStatus, setCameraStatus] = useState<"checking" | "ok" | "error">("checking");
@@ -128,6 +138,8 @@ export function InterviewLobby({
   const interviewId = useInterviewStore((s) => s.interviewId);
   const selectedVoiceId = useInterviewStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useInterviewStore((s) => s.setSelectedVoiceId);
+  const sttLanguage = useInterviewStore((s) => s.sttLanguage);
+  const setSttLanguage = useInterviewStore((s) => s.setSttLanguage);
   const isResuming = useInterviewStore((s) => s.status === "in_progress");
   const duration = useInterviewStore((s) => s.duration);
   const mounted = useRef(false);
@@ -173,8 +185,8 @@ export function InterviewLobby({
       const voiceExists = available.some((v) => v.id === currentVoice);
 
       if (!voiceExists && available.length > 0) {
-        const defaultAnanya = available.find((v) => v.name === "Ananya") || available.find((v) => v.gender === "female") || available[0];
-        setSelectedVoiceId(defaultAnanya.id);
+        const defaultNalini = available.find((v) => v.id === "gnani_nalini") || available.find((v) => v.gender === "female") || available[0];
+        setSelectedVoiceId(defaultNalini.id);
       }
     };
 
@@ -255,6 +267,21 @@ export function InterviewLobby({
       isSubscribed = false;
     };
   }, [isResuming]);
+
+  // Instant Launch on Enter Key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
+        return;
+      }
+      if (e.key === "Enter" && !(mode === "voice" && micStatus === "error")) {
+        e.preventDefault();
+        onReady(interviewStyle);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onReady, interviewStyle, mode, micStatus]);
 
   // Clean up camera stream on unmount
   useEffect(() => {
@@ -381,13 +408,43 @@ export function InterviewLobby({
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 sm:p-8">
-      <div className="w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
-        <div className="border-b border-border bg-muted/30 p-6 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Pre-Interview Check</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Let&apos;s make sure your setup is ready before we start the timer.
-          </p>
+    <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 sm:p-8 bg-dot-grid-subtle">
+      <div className="w-full max-w-3xl overflow-hidden rounded-2xl border-2 border-border bg-card neo-shadow">
+        {/* Top Google Tech 4-Color Accent Stripe (Inspired by Image 2) */}
+        <div className="h-1.5 w-full grid grid-cols-4 shrink-0 border-b border-border/80">
+          <div className="bg-[#4285F4]"></div>
+          <div className="bg-[#EA4335]"></div>
+          <div className="bg-[#FBBC05]"></div>
+          <div className="bg-[#34A853]"></div>
+        </div>
+
+        {/* Top Header with Instant Enter Action (Zero scroll required) */}
+        <div className="border-b-2 border-border bg-muted/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground">Pre-Interview Check</h1>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-500">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Setup
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+              Verify your setup and review the session outline before entering the room.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onReady(interviewStyle)}
+              disabled={mode === "voice" && micStatus === "error"}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-extrabold text-primary-foreground border-2 border-primary/80 neo-shadow-sm transition-all hover:translate-x-0.5 hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer w-full sm:w-auto"
+            >
+              <span>Enter Interview Room</span>
+              <span className="hidden sm:inline text-xs opacity-75 font-mono">(↵ Enter)</span>
+              <ArrowRight className="size-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 sm:p-8">
@@ -486,7 +543,7 @@ export function InterviewLobby({
                           onChange={(e) => setSelectedVoiceId(e.target.value)}
                           className="mt-1 block w-full rounded-md border-0 py-1 pl-2 pr-8 text-[11px] text-muted-foreground bg-secondary focus:ring-1 focus:ring-primary outline-none cursor-pointer truncate"
                         >
-                          <optgroup label="Female Voices (Default: Ananya)">
+                          <optgroup label="Female Voices (Default: Nalini)">
                             {voices.filter(v => v.gender === "female").map(v => (
                               <option key={v.id} value={v.id}>{v.label}</option>
                             ))}
@@ -496,6 +553,37 @@ export function InterviewLobby({
                               <option key={v.id} value={v.id}>{v.label}</option>
                             ))}
                           </optgroup>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Regional Spoken Viva Language Selector */}
+                  <div className="flex items-center justify-between rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+                        <Globe className="size-4" />
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-sm font-medium">Spoken Viva Language</p>
+                        <select 
+                          value={sttLanguage || "en-IN"}
+                          onChange={(e) => {
+                            const langCode = e.target.value;
+                            setSttLanguage(langCode);
+                            if (typeof window !== "undefined") {
+                              try {
+                                localStorage.setItem("interview_pilot_stt_lang", langCode);
+                              } catch {}
+                            }
+                          }}
+                          className="mt-1 block w-full rounded-md border-0 py-1 pl-2 pr-8 text-[11px] text-muted-foreground bg-secondary focus:ring-1 focus:ring-primary outline-none cursor-pointer truncate"
+                        >
+                          {STT_LANGUAGES.map((lang) => (
+                            <option key={lang.code} value={lang.code}>
+                              {lang.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                     </div>
@@ -531,121 +619,223 @@ export function InterviewLobby({
               </div>
             </div>
 
-            {/* Right Column: Placement Viva Dossier & Evaluation Structure */}
+            {/* Right Column: Session Overview & Structure */}
             <div className="space-y-5">
-              {/* Profile Anchor Dossier Card */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <Sparkles className="size-4 text-primary" />
-                    <span>3. Placement Dossier Anchored</span>
-                  </h3>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Verified
-                  </span>
-                </div>
+              {/* Profile Focus Card */}
+              {(() => {
+                // ─── Extract Job-Specific Role, Company & Tech Stack ──────────
+                let roleFromMeta = jobRole?.title || "";
+                let companyFromMeta = "";
+                let stackFromMeta: string[] = [];
 
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-background/80 border border-border/50 p-2">
-                      <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
-                        Target Role
-                      </span>
-                      <span className="font-semibold text-foreground truncate block mt-0.5">
-                        {profile?.targetRole || "Software Engineer"}
+                if (jobRole?.targetSkills) {
+                  stackFromMeta = jobRole.targetSkills
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                }
+
+                if (problemDescription) {
+                  const roleMatch = problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
+                  if (roleMatch && roleMatch[1]?.trim()) roleFromMeta = roleMatch[1].trim();
+                  const compMatch = problemDescription.match(/\-\s*\*\*Target Company\*\*:\s*([^\n\r]+)/i);
+                  if (compMatch && compMatch[1]?.trim()) companyFromMeta = compMatch[1].trim();
+                  const stackMatch = problemDescription.match(/\-\s*\*\*Required Stack\*\*:\s*([^\n\r]+)/i);
+                  if (stackMatch && stackMatch[1]?.trim()) {
+                    const parsed = stackMatch[1].split(",").map((s) => s.trim()).filter(Boolean);
+                    if (parsed.length > 0) stackFromMeta = parsed;
+                  }
+                }
+
+                if (problemTitle) {
+                  if (problemTitle.includes("Technical Viva:")) {
+                    const parts = problemTitle.split("Technical Viva:");
+                    if (!companyFromMeta) companyFromMeta = parts[0]?.trim();
+                    if (!roleFromMeta && parts[1]?.trim()) roleFromMeta = parts[1].trim();
+                  } else if (problemTitle.includes(":")) {
+                    const parts = problemTitle.split(":");
+                    if (!companyFromMeta) companyFromMeta = parts[0]?.trim();
+                    if (!roleFromMeta && parts[1]?.trim()) roleFromMeta = parts[1].trim();
+                  }
+                }
+
+                const effectiveRole = roleFromMeta || profile?.targetRole || "Software Engineer";
+                const displayStack = stackFromMeta.length > 0
+                  ? stackFromMeta
+                  : (Array.isArray(profile?.skills) ? profile!.skills : []);
+
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        <Sparkles className="size-4 text-primary" />
+                        <span>3. Session Overview</span>
+                      </h3>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Verified
                       </span>
                     </div>
 
-                    <div className="rounded-lg bg-background/80 border border-border/50 p-2">
-                      <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
-                        Project in Defense
-                      </span>
-                      <div className="flex items-center gap-1 mt-0.5 truncate">
-                        <span className="font-semibold text-foreground truncate">
-                          {profile?.projects?.[0]?.title || "Skills & Track Defense"}
-                        </span>
-                        {profile?.projects?.[0]?.liveUrl && (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500 font-medium shrink-0 ml-1">
-                            <Globe className="size-2.5" />
-                            Live
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg bg-background/80 border border-border/50 p-2">
+                          <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                            Target Role
                           </span>
-                        )}
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-semibold text-foreground truncate" title={effectiveRole}>
+                              {effectiveRole}
+                            </span>
+                            {companyFromMeta && (
+                              <span className="text-[9px] font-semibold text-primary px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 shrink-0">
+                                {companyFromMeta}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-background/80 border border-border/50 p-2">
+                          <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                            Featured Project
+                          </span>
+                          <div className="flex items-center gap-1 mt-0.5 truncate">
+                            <span className="font-semibold text-foreground truncate">
+                              {profile?.projects?.[0]?.title || "System Architecture"}
+                            </span>
+                            {profile?.projects?.[0]?.liveUrl && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-500 font-medium shrink-0 ml-1">
+                                <Globe className="size-2.5" />
+                                Live
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+
+                      {displayStack.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                          <span className="text-[10px] text-muted-foreground">
+                            {stackFromMeta.length > 0 ? "Role Tech Stack:" : "Key Skills:"}
+                          </span>
+                          {displayStack.slice(0, 5).map((s, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-foreground"
+                            >
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-muted-foreground leading-tight pt-0.5">
+                        {companyFromMeta
+                          ? `Questions will evaluate your technical architecture, code modularity, and trade-offs for ${effectiveRole} at ${companyFromMeta}.`
+                          : "Questions will focus on your system design, technical decisions, and implementation depth."}
+                      </p>
                     </div>
                   </div>
+                );
+              })()}
 
-                  {Array.isArray(profile?.skills) && profile.skills.length > 0 && (
-                    <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                      <span className="text-[10px] text-muted-foreground">Probed Stack:</span>
-                      {profile.skills.slice(0, 4).map((s, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-foreground"
-                        >
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <p className="text-[11px] text-muted-foreground leading-tight pt-0.5">
-                    The AI interviewer will probe your actual project architecture, API latency, and tech stack decisions.
-                  </p>
-                </div>
-              </div>
-
-              {/* Placement Viva Structure */}
+              {/* Interview Structure (Directly styled with Image 2 Neo-Brutalist Cards) */}
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-foreground">
-                  Viva Evaluation Format ({duration} Mins)
-                </h3>
-                <div className="rounded-xl border border-border bg-background p-3.5">
-                  <div className="relative border-l border-border/80 ml-2 pl-4 space-y-4">
-                    {/* Stage 1 */}
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-blue-500 ring-4 ring-background" />
-                      <h4 className="text-xs font-semibold text-foreground">
-                        1. Profile & Experience Intro
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        ~{introTime} min • Background review, achievements, & role motivation
-                      </p>
-                    </div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs sm:text-sm font-black text-foreground tracking-tight flex items-center gap-1.5">
+                    <span>Interview Roadmap ({duration} mins):</span>
+                    <span className="bg-[#FF4D4D] text-white px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-xs">
+                      4 Stages
+                    </span>
+                  </h3>
+                </div>
 
-                    {/* Stage 2 */}
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-purple-500 ring-4 ring-background" />
-                      <h4 className="text-xs font-semibold text-foreground">
-                        2. Project Defense & Architecture
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        ~{problemTime} min • Deep probe into {profile?.projects?.[0]?.title || "project architecture"}, API latency, & DB schema
-                      </p>
+                <div className="space-y-2">
+                  {/* Stage 1 */}
+                  <div className="rounded-xl border-2 border-border bg-card p-2.5 neo-shadow-sm flex items-start gap-2.5">
+                    <div className="size-8 rounded-lg border-2 border-border bg-[#FFE4E6] flex items-center justify-center text-stone-900 shrink-0 mt-0.5">
+                      <MessageSquare className="size-3.5" />
                     </div>
-
-                    {/* Stage 3 */}
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-4 ring-background" />
-                      <h4 className="text-xs font-semibold text-foreground">
-                        3. System Trade-offs & Code
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#FF4D4D]">Stage 1</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">• ~{introTime} min</span>
+                      </div>
+                      <h4 className="text-xs font-black text-foreground tracking-tight truncate">
+                        Introduction & Role Alignment
                       </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        ~{codeTime} min • Live technical problem solving & modularity discussion
-                      </p>
-                    </div>
-
-                    {/* Stage 4 */}
-                    <div className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-amber-500 ring-4 ring-background" />
-                      <h4 className="text-xs font-semibold text-foreground">
-                        4. Recruiter Verdict & Scorecard
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        ~{wrapTime} min • Placement tier evaluation (0–100) & top 5 fixes
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Career goals, background, & technical interests
                       </p>
                     </div>
                   </div>
+
+                  {/* Stage 2 */}
+                  <div className="rounded-xl border-2 border-border bg-card p-2.5 neo-shadow-sm flex items-start gap-2.5">
+                    <div className="size-8 rounded-lg border-2 border-border bg-[#EDE9FE] flex items-center justify-center text-stone-900 shrink-0 mt-0.5">
+                      <Layers className="size-3.5" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#FF4D4D]">Stage 2</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">• ~{problemTime} min</span>
+                      </div>
+                      <h4 className="text-xs font-black text-foreground tracking-tight truncate">
+                        Project Architecture & Deep Dive
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground leading-snug truncate">
+                        Technical design of {profile?.projects?.[0]?.title || "featured project"}, APIs & database
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Stage 3 */}
+                  <div className="rounded-xl border-2 border-border bg-card p-2.5 neo-shadow-sm flex items-start gap-2.5">
+                    <div className="size-8 rounded-lg border-2 border-border bg-[#E0F2FE] flex items-center justify-center text-stone-900 shrink-0 mt-0.5">
+                      <Code2 className="size-3.5" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#FF4D4D]">Stage 3</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">• ~{codeTime} min</span>
+                      </div>
+                      <h4 className="text-xs font-black text-foreground tracking-tight truncate">
+                        Technical Trade-offs & Problem Solving
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Practical problem solving, edge cases, & coding approach
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Stage 4 */}
+                  <div className="rounded-xl border-2 border-border bg-card p-2.5 neo-shadow-sm flex items-start gap-2.5">
+                    <div className="size-8 rounded-lg border-2 border-border bg-[#FEF3C7] flex items-center justify-center text-stone-900 shrink-0 mt-0.5">
+                      <Award className="size-3.5" />
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#FF4D4D]">Stage 4</span>
+                        <span className="text-[10px] text-muted-foreground font-semibold">• ~{wrapTime} min</span>
+                      </div>
+                      <h4 className="text-xs font-black text-foreground tracking-tight truncate">
+                        Feedback & Performance Summary
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Comprehensive scorecard, strengths, & top priority improvements
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* High-Contrast "Remember" Banner (From Image 2) */}
+                <div className="mt-3 rounded-xl border-2 border-border bg-neutral-950 p-2.5 text-white flex items-center gap-2.5 neo-shadow-sm">
+                  <span className="shrink-0 bg-[#FF4D4D] text-white font-black text-[9px] px-2 py-0.5 rounded-md border border-black uppercase tracking-wider">
+                    Remember
+                  </span>
+                  <p className="text-[10px] sm:text-[11px] font-medium text-stone-200 leading-tight">
+                    Technical viva evaluates your reasoning process and communication clarity, not just silent code output.
+                  </p>
                 </div>
               </div>
             </div>
@@ -653,16 +843,19 @@ export function InterviewLobby({
           </div>
         </div>
 
-        <div className="border-t border-border bg-muted/30 p-6 flex justify-between items-center">
-          <p className="text-xs text-muted-foreground">
-            Make sure you&apos;re in a quiet environment.
+        <div className="border-t border-border bg-muted/30 p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <p className="text-xs text-muted-foreground text-center sm:text-left">
+            Make sure you&apos;re in a quiet environment with a working microphone.
           </p>
           <button
+            type="button"
             onClick={() => onReady(interviewStyle)}
             disabled={mode === "voice" && micStatus === "error"}
-            className="rounded-md bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer w-full sm:w-auto"
           >
-            I&apos;m Ready, Start
+            <span>Enter Interview Room</span>
+            <span className="hidden sm:inline text-xs opacity-75 font-mono">(↵ Enter)</span>
+            <ArrowRight className="size-4" />
           </button>
         </div>
       </div>

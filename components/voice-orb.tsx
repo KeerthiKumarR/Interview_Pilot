@@ -55,7 +55,7 @@ export function VoiceOrb({
     },
     error: {
       label: "Audio Reconnecting",
-      sublabel: "Restoring audio pipeline...",
+      sublabel: "Restoring audio engine...",
       pillClass: "border-rose-500/40 bg-rose-500/10 text-rose-400",
       icon: AlertCircle,
       color: "#F43F5E",
@@ -66,9 +66,10 @@ export function VoiceOrb({
   const current = stateConfig[state] || stateConfig.idle;
   const IconComponent = current.icon;
   const normalizedLevel = Math.min(100, Math.max(0, audioLevel));
+  const coreSize = Math.max(38, Math.round(size * 0.72));
 
   return (
-    <div className={`flex flex-col items-center justify-center select-none py-3 space-y-3.5 ${className}`}>
+    <div className={`flex flex-col items-center justify-center select-none py-1 space-y-1.5 ${className}`}>
       {/* Concentric Acoustic Amplitude Ring */}
       <div
         className="relative flex items-center justify-center"
@@ -82,7 +83,7 @@ export function VoiceOrb({
               state === "speaking" || state === "listening"
                 ? `scale(${1 + normalizedLevel * 0.0035})`
                 : "scale(1)",
-            boxShadow: `0 0 40px 6px ${current.glow}`,
+            boxShadow: `0 0 30px 4px ${current.glow}`,
             borderColor: current.color,
             borderWidth: "1.5px",
             opacity: 0.85,
@@ -91,7 +92,7 @@ export function VoiceOrb({
 
         {/* Outer Ring */}
         <div
-          className="absolute inset-3 rounded-full border border-border/80 transition-all duration-300"
+          className="absolute inset-1.5 rounded-full border border-border/80 transition-all duration-300"
           style={{
             transform:
               state === "speaking" || state === "listening"
@@ -102,27 +103,29 @@ export function VoiceOrb({
 
         {/* Center Acoustic Core */}
         <div
-          className="relative z-10 w-24 h-24 rounded-full flex flex-col items-center justify-center border border-border bg-card/90 shadow-2xl backdrop-blur-md transition-all duration-200"
+          className="relative z-10 rounded-full flex flex-col items-center justify-center border border-border bg-card/90 shadow-xl backdrop-blur-md transition-all duration-200"
           style={{
-            boxShadow: `0 10px 30px -5px ${current.glow}, inset 0 1px 0 rgba(255,255,255,0.1)`,
+            width: `${coreSize}px`,
+            height: `${coreSize}px`,
+            boxShadow: `0 8px 24px -4px ${current.glow}, inset 0 1px 0 rgba(255,255,255,0.1)`,
           }}
         >
           <IconComponent
-            className={`w-6 h-6 ${state === "thinking" ? "animate-spin" : ""}`}
+            className={`${coreSize < 56 ? "w-4 h-4" : "w-5 h-5"} ${state === "thinking" ? "animate-spin" : ""}`}
             style={{ color: current.color }}
           />
 
           {/* Equalizer Frequency Bars */}
-          <div className="flex items-center gap-1 mt-2 h-4">
+          <div className="flex items-center gap-0.5 mt-1 h-3">
             {[0.35, 0.75, 1, 0.8, 0.45].map((multiplier, i) => (
               <div
                 key={i}
-                className="w-1 rounded-full transition-all duration-100"
+                className="w-0.5 rounded-full transition-all duration-100"
                 style={{
                   height:
                     state === "speaking" || state === "listening"
-                      ? `${Math.max(4, normalizedLevel * multiplier * 0.16 + 4)}px`
-                      : "4px",
+                      ? `${Math.max(3, normalizedLevel * multiplier * 0.12 + 3)}px`
+                      : "3px",
                   backgroundColor:
                     state === "speaking" || state === "listening"
                       ? current.color
@@ -136,17 +139,17 @@ export function VoiceOrb({
       </div>
 
       {/* State Status Pill */}
-      <div className="flex flex-col items-center text-center space-y-1">
+      <div className="flex flex-col items-center text-center space-y-0.5">
         <span
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tracking-tight transition-colors ${current.pillClass}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-tight transition-colors ${current.pillClass}`}
         >
           <span
-            className="w-2 h-2 rounded-full animate-pulse"
+            className="w-1.5 h-1.5 rounded-full animate-pulse"
             style={{ backgroundColor: current.color }}
           />
           {current.label}
         </span>
-        <p className="text-[11px] text-muted-foreground font-mono">
+        <p className="text-[10px] text-muted-foreground font-mono">
           {current.sublabel}
         </p>
       </div>

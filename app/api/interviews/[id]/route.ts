@@ -43,10 +43,11 @@ export async function GET(req: Request, context: RouteContext) {
       );
     }
 
-    // Re-combine thinking and content for the frontend UI to render correctly
+    // Return clean candidate-facing content (thinking kept in separate field)
     const formattedMessages = interview.messages.map((m) => ({
       ...m,
-      content: m.thinking ? `\n*Thinking...*\n${m.thinking}\n\n---\n\n${m.content}` : m.content,
+      content: m.content,
+      thinking: m.thinking || null,
     }));
 
     return NextResponse.json({ 

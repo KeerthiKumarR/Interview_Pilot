@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   MapPin,
@@ -14,6 +15,8 @@ import {
   Send,
   Calendar,
   AlertCircle,
+  PlayCircle,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +35,7 @@ export interface JobItem {
   minReadinessScore: number;
   isMSOTInternal: boolean;
   stipendOrSalary?: string | null;
-  createdAt: string;
+  createdAt?: string | Date;
   fitPercentage: number;
   matchedSkills: string[];
   missingSkills: string[];
@@ -50,8 +53,37 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, onUpdateStatus }: JobCardProps) {
+  const router = useRouter();
   const [updating, setUpdating] = useState(false);
+  const [startingPractice, setStartingPractice] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(job.applicationStatus || "None");
+
+  const handleStartPractice = async () => {
+    try {
+      setStartingPractice(true);
+      const res = await fetch("/api/jobs/practice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobTitle: job.title,
+          company: job.company,
+          requiredSkills: job.requiredSkills,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to create practice interview");
+      }
+
+      const data = await res.json();
+      if (data.url) {
+        router.push(data.url);
+      }
+    } catch (err) {
+      console.error("Error starting practice viva:", err);
+      setStartingPractice(false);
+    }
+  };
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -85,27 +117,27 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
   const fitBadge = getFitBadge(job.fitPercentage);
 
   return (
-    <Card
-      className={`border transition-all duration-200 overflow-hidden ${
+    <div
+      className={`rounded-2xl border-2 transition-all duration-200 overflow-hidden bg-card neo-shadow-sm hover:translate-x-0.5 hover:-translate-y-0.5 ${
         job.isMSOTInternal
-          ? "border-primary/40 bg-card/90 shadow-sm ring-1 ring-primary/20"
-          : "border-border/60 bg-card/60 hover:border-border"
+          ? "border-primary/80 ring-2 ring-primary/30"
+          : "border-border hover:border-foreground/40"
       }`}
     >
       {/* Top Banner for Internal MSOT Drives */}
       {job.isMSOTInternal && (
-        <div className="bg-primary/10 border-b border-primary/20 px-4 py-1.5 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 font-medium text-primary">
+        <div className="bg-primary/10 border-b-2 border-primary/20 px-4 py-1.5 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 font-black text-primary">
             <GraduationCap className="h-3.5 w-3.5" />
             <span>Exclusive MSOT Campus Drive</span>
           </div>
-          <span className="text-[11px] text-muted-foreground font-mono">
+          <span className="text-[11px] text-muted-foreground font-mono font-bold">
             Direct Screening
           </span>
         </div>
       )}
 
-      <CardContent className="p-5 space-y-4">
+      <div className="p-5 space-y-4">
         {/* Title & Company Row */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="space-y-1">
@@ -197,12 +229,12 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
           </div>
         </div>
 
-        {/* Footer Actions & Application Pipeline */}
+        {/* Footer Actions & Application Status */}
         <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-border/60">
           {/* Status Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-            <span className="text-[11px] text-muted-foreground font-medium mr-1 shrink-0">
-              Pipeline:
+            <span className="text-[11px] text-muted-foreground font-bold mr-1 shrink-0">
+              Application Status:
             </span>
             {(["Saved", "Applied", "Interview", "Offer"] as const).map((status) => {
               const active = currentStatus === status;
@@ -226,6 +258,26 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={startingPractice}
+              onClick={handleStartPractice}
+              className="h-8 gap-1.5 text-xs font-semibold hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
+            >
+              {startingPractice ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Launching Viva...</span>
+                </>
+              ) : (
+                <>
+                  <PlayCircle className="h-3.5 w-3.5 text-primary" />
+                  <span>Practice Viva for this Job</span>
+                </>
+              )}
+            </Button>
+
             <a
               href={job.applyUrl}
               target="_blank"
@@ -237,7 +289,7 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
             </a>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

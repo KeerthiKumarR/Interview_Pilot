@@ -6,7 +6,10 @@ import {
   getAvailableVoices,
   STT_LANGUAGES,
   type VoiceOption,
+  stopSpeaking,
 } from "@/hooks/use-web-speech";
+import { stopAllTTSAudio } from "@/hooks/use-tts";
+import { useRouter } from "next/navigation";
 
 /**
  * Voice control bar — Mic toggle, Speaker toggle, Voice picker,
@@ -100,19 +103,37 @@ export function VoiceControls() {
     setShowConfirm(true);
   }
 
+  const router = useRouter();
+
   async function handleConfirmEnd() {
     setShowConfirm(false);
+    // Gracefully stop all speech and audio playback immediately
     try {
-      await fetch(`/api/interviews/${interviewId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, action: "submit" }),
-      });
+      stopSpeaking();
+      stopAllTTSAudio();
+    } catch {}
+
+    const store = useInterviewStore.getState();
+    store.setTimerActive(false);
+    store.setAIState("idle");
+    store.setIsStreaming(false);
+
+    try {
+      if (interviewId) {
+        fetch(`/api/interviews/${interviewId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, action: "submit" }),
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error("Failed to save code on end:", e);
     }
-    setTimerActive(false);
-    setStatus("completed");
+
+    store.setStatus("completed");
+    if (interviewId) {
+      router.replace(`/report/${interviewId}`);
+    }
   }
 
   const selectedVoice = voices.find((v) => v.id === selectedVoiceId);
@@ -206,7 +227,7 @@ export function VoiceControls() {
           {showVoicePicker && (
             <div className="absolute bottom-full left-0 mb-1 min-w-[180px] rounded-lg border border-border bg-background shadow-xl z-50">
               <div className="px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
-                Female Voices (Default: Ananya)
+                Female Voices (Default: Nalini)
               </div>
               {voices
                 .filter((v) => v.gender === "female")

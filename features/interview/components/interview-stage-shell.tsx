@@ -32,10 +32,13 @@ import {
   Check,
   Sparkles,
   Radio,
+  Loader2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MiraiLogo } from "@/components/mirai-logo";
 import { VoiceOrb } from "@/components/voice-orb";
+import { stopAllTTSAudio } from "@/hooks/use-tts";
+import { cleanInterviewChatText } from "@/lib/utils";
 
 export interface InterviewStageShellProps {
   interview?: {
@@ -79,6 +82,8 @@ export function InterviewStageShell({
   const { user } = useUser();
   const isMicMuted = useInterviewStore((s) => s.isMicMuted);
   const toggleMic = useInterviewStore((s) => s.toggleMic);
+  const isCameraOff = useInterviewStore((s) => s.isCameraOff);
+  const toggleCamera = useInterviewStore((s) => s.toggleCamera);
   const messages = useInterviewStore((s) => s.messages);
   const timeRemainingSeconds = useInterviewStore((s) => s.timeRemainingSeconds);
   const duration = useInterviewStore((s) => s.duration);
@@ -88,40 +93,62 @@ export function InterviewStageShell({
   const sttLanguage = useInterviewStore((s) => s.sttLanguage);
 
   const interviewerName = useMemo(() => {
+    // Dynamically synchronize badge name with opening greeting if already present in transcript
+    const firstAssistantMsg = messages.find((m) => m.role === "assistant")?.content || "";
+    const match = firstAssistantMsg.match(/(?:I'm|I am|नाम|मैं)\s+([A-Za-z\u0900-\u097F]+)/i);
+    if (match && match[1] && !["the", "your", "conducting", "here", "excited", "ready", "pleased", "thrilled"].includes(match[1].toLowerCase())) {
+      return match[1];
+    }
+    if (firstAssistantMsg.toLowerCase().includes("arun") || firstAssistantMsg.toLowerCase().includes("aarav") || firstAssistantMsg.toLowerCase().includes("ramesh")) {
+      return "Arun";
+    }
+    if (firstAssistantMsg.toLowerCase().includes("pooja")) {
+      return "Pooja";
+    }
+    if (firstAssistantMsg.toLowerCase().includes("nalini")) {
+      return "Nalini";
+    }
+
     const map: Record<string, string> = {
-      local_female: "Ananya",
-      local_male: "Aarav",
-      am_adam: "Aarav",
+      gnani_nalini: "Nalini",
+      gnani_pooja: "Pooja",
+      gnani_arun: "Arun",
+      nalini: "Nalini",
+      pooja: "Pooja",
+      arun: "Arun",
+      local_female: "Nalini",
+      local_male: "Arun",
+      am_adam: "Arun",
       am_michael: "Rohan",
       am_fenrir: "Vikram",
       am_puck: "Kabir",
       am_echo: "Aditya",
-      af_heart: "Ananya",
+      af_heart: "Nalini",
       af_bella: "Diya",
       af_sarah: "Isha",
       af_nicole: "Kavya",
       af_sky: "Meera",
       if_sara: "Priya",
-      minimax_male_presenter: "Dev",
-      minimax_female_shaonv: "Riya",
-      minimax_female_yujie: "Sanya",
-      gemini_alloy: "Neer",
-      gemini_echo: "Siddharth",
-      gemini_onyx: "Varun",
-      gemini_nova: "Tara",
-      gemini_shimmer: "Neha",
+      minimax_male_presenter: "Arun",
+      minimax_female_shaonv: "Pooja",
+      minimax_female_yujie: "Nalini",
+      gemini_alloy: "Arun",
+      gemini_echo: "Arun",
+      gemini_onyx: "Arun",
+      gemini_nova: "Pooja",
+      gemini_shimmer: "Nalini",
     };
-    return (selectedVoiceId && map[selectedVoiceId]) || "Ananya";
-  }, [selectedVoiceId]);
+    return (selectedVoiceId && map[selectedVoiceId]) || "Nalini";
+  }, [selectedVoiceId, messages]);
 
   // Active Tab in Right Sidebar: "voice" | "chat" | "info" (Defaults to Live Spoken Viva)
   const [activeTab, setActiveTab] = useState<"voice" | "chat" | "info">("voice");
 
   // Local media & UI states
-  const [isCameraOff, setIsCameraOff] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPipExpanded, setIsPipExpanded] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   const [inputText, setInputText] = useState("");
   const [isSpeechListening, setIsSpeechListening] = useState(false);
 
@@ -303,8 +330,8 @@ export function InterviewStageShell({
   };
 
   // Seamless Continuous Voice Viva Loop:
-  // When Ananya finishes speaking -> auto-start listening to candidate!
-  // When Ananya starts speaking/thinking -> auto-pause listening!
+  // When AI finishes speaking -> auto-start listening to candidate!
+  // When AI starts speaking/thinking -> auto-pause listening!
   useEffect(() => {
     if (!isLiveVoiceMode || isMicMuted) return;
 
@@ -444,11 +471,37 @@ export function InterviewStageShell({
 
   // Sync camera stream to PiP element
   useEffect(() => {
-    if (videoRef.current && cameraStream) {
-      videoRef.current.srcObject = isCameraOff ? null : cameraStream;
-      videoRef.current.play().catch(() => {});
+    if (videoRef.current) {
+      if (isCameraOff || !cameraStream) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+        } catch {}
+      } else {
+        videoRef.current.srcObject = cameraStream;
+        videoRef.current.play().catch(() => {});
+      }
     }
   }, [cameraStream, isCameraOff]);
+
+  // Ensure camera hardware tracks are released on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+        } catch {}
+      }
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+      }
+    };
+  }, [cameraStream]);
 
   // Auto-scroll chat on message change
   useEffect(() => {
@@ -484,13 +537,23 @@ export function InterviewStageShell({
   }, [isLiveVoiceMode, liveSpeech, liveInterim]);
 
   const handleToggleCamera = () => {
-    if (cameraStream) {
-      const tracks = cameraStream.getVideoTracks();
-      tracks.forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsCameraOff((prev) => !prev);
+    if (!isCameraOff) {
+      // Immediately detach video preview & release hardware tracks so green light turns off
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.srcObject = null;
+        } catch {}
+      }
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+          } catch {}
+        });
+      }
     }
+    toggleCamera();
   };
 
   const handleToggleFullscreen = () => {
@@ -522,6 +585,59 @@ export function InterviewStageShell({
     setInputText("");
   };
 
+  const handleOpenEndModal = useCallback(() => {
+    // 1. Immediately pause/stop agent speech & generation so user isn't talked over
+    onStopGeneration?.();
+    stopAllTTSAudio();
+    setShowEndModal(true);
+  }, [onStopGeneration]);
+
+  const handleConfirmEndInterview = useCallback(() => {
+    setIsExiting(true);
+
+    // 1. Immediately stop agent generation & audio
+    onStopGeneration?.();
+    stopAllTTSAudio();
+
+    // 2. Immediately stop local microphone recognition & audio processing
+    try {
+      stopListening();
+    } catch {}
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+    }
+
+    // 3. Immediately detach video preview & release hardware tracks so green light turns off
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      } catch {}
+    }
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+    }
+
+    // 4. Close modal and execute graceful end in parent
+    setShowEndModal(false);
+    onEndInterview();
+  }, [onStopGeneration, stopListening, onEndInterview, cameraStream]);
+
   const formatTimer = (secs: number) => {
     const mins = Math.floor(Math.max(0, secs) / 60);
     const rem = Math.max(0, secs) % 60;
@@ -550,10 +666,10 @@ export function InterviewStageShell({
   const stages = useMemo(() => {
     if (isViva) {
       return [
-        { num: 1, label: "Intro", fullTitle: "1. Intro & Role Fit", category: "code_editor" },
-        { num: 2, label: "Defense", fullTitle: "2. Project Defense", category: "code_editor" },
+        { num: 1, label: "Intro", fullTitle: "1. Intro & Background", category: "code_editor" },
+        { num: 2, label: "Projects", fullTitle: "2. Project Deep Dive", category: "code_editor" },
         { num: 3, label: "System", fullTitle: "3. Architecture & Code", category: "code_editor" },
-        { num: 4, label: "Wrap-up", fullTitle: "4. Wrap-up & Scoring", category: "code_editor" },
+        { num: 4, label: "Summary", fullTitle: "4. Summary & Feedback", category: "code_editor" },
       ];
     }
 
@@ -721,10 +837,10 @@ export function InterviewStageShell({
 
       const subtitle = isViva
         ? nextStage.num === 2
-          ? "Featured Project Architecture Defense"
+          ? "Featured Project Architecture & Trade-offs"
           : nextStage.num === 3
           ? "System Scalability & Code Scratchpad"
-          : "Behavioral & Placement Scoring"
+          : "Summary & Feedback"
         : nextStage.category === "code_editor"
         ? "Problem Solving & Implementation"
         : nextStage.category === "drawing"
@@ -756,6 +872,14 @@ export function InterviewStageShell({
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background text-foreground select-none overflow-hidden font-sans transition-colors duration-200">
+      {/* Top Google Tech 4-Color Accent Stripe (Inspired by Image 2) */}
+      <div className="h-1.5 w-full grid grid-cols-4 shrink-0 border-b border-border/80 z-40">
+        <div className="bg-[#4285F4]"></div>
+        <div className="bg-[#EA4335]"></div>
+        <div className="bg-[#FBBC05]"></div>
+        <div className="bg-[#34A853]"></div>
+      </div>
+
       {/* ─── 1. TOP HEADER BAR ────────────────────────────────────────── */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/85 backdrop-blur-md px-6 z-30">
         {/* Left: Mirai Copilot Logo + Role Title */}
@@ -943,7 +1067,7 @@ export function InterviewStageShell({
           {/* End Interview Button */}
           <button
             type="button"
-            onClick={() => setShowEndModal(true)}
+            onClick={handleOpenEndModal}
             className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-rose-500/15 hover:border-rose-500/30 hover:text-rose-600 dark:hover:text-rose-300 transition cursor-pointer shadow-xs"
           >
             <PhoneOff className="h-3.5 w-3.5" />
@@ -953,11 +1077,11 @@ export function InterviewStageShell({
       </header>
 
       {/* ─── 2. MAIN WORKSPACE (LEFT STAGE + RIGHT SIDEBAR) ───────────── */}
-      <main className="flex flex-1 overflow-hidden p-4 gap-4">
+      <main className="flex flex-1 overflow-hidden p-4 gap-4 bg-dot-grid-subtle">
         {/* ─── LEFT COLUMN: WORKSPACE CONTENT + BOTTOM DOCK ───────────── */}
         <div className="flex flex-1 flex-col justify-between overflow-hidden relative">
           {/* Main Stage Content (Children Slot) */}
-          <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border-2 border-border bg-card neo-shadow">
             {children}
           </div>
 
@@ -1097,9 +1221,9 @@ export function InterviewStageShell({
         </div>
 
         {/* ─── RIGHT COLUMN: CONVERSATION TABS & NEXT STAGE ───────────── */}
-        <aside className="flex w-80 sm:w-96 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-2xl">
+        <aside className="flex w-80 sm:w-96 shrink-0 flex-col justify-between overflow-hidden rounded-2xl border-2 border-border bg-card p-3 sm:p-3.5 neo-shadow">
           {/* Top Tabs: Live Voice Viva (Primary), Chat Transcript, Stage Info */}
-          <div className="flex items-center border-b border-border pb-2.5 gap-1">
+          <div className="flex items-center border-b border-border pb-2 gap-1">
             <button
               type="button"
               onClick={() => setActiveTab("voice")}
@@ -1110,7 +1234,7 @@ export function InterviewStageShell({
               <Radio className={`h-3.5 w-3.5 ${activeTab === "voice" ? "text-emerald-500 animate-pulse" : ""}`} />
               <span>Live Spoken Viva</span>
               {activeTab === "voice" && (
-                <div className="absolute -bottom-2.5 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
+                <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
               )}
             </button>
 
@@ -1124,7 +1248,7 @@ export function InterviewStageShell({
               <MessageSquare className="h-3.5 w-3.5" />
               <span>Chat Log</span>
               {activeTab === "chat" && (
-                <div className="absolute -bottom-2.5 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
               )}
             </button>
 
@@ -1138,34 +1262,162 @@ export function InterviewStageShell({
               <Info className="h-3.5 w-3.5" />
               <span>Stage Info</span>
               {activeTab === "info" && (
-                <div className="absolute -bottom-2.5 left-0 right-0 h-0.5 bg-foreground rounded-full" />
+                <div className="absolute -bottom-2 left-0 right-0 h-0.5 bg-foreground rounded-full" />
               )}
             </button>
           </div>
 
           {/* ─── TAB 1: LIVE SPOKEN VIVA (VOICE-TO-VOICE ROOM) ───────────── */}
           {activeTab === "voice" && (
-            <div className="flex flex-1 flex-col overflow-y-auto pr-1 my-2 space-y-3">
-              {/* Interviewer Stage Presence Card with VoiceOrb */}
-              <div className="relative rounded-2xl border border-border bg-gradient-to-b from-secondary/40 via-card to-background p-3.5 shrink-0 shadow-md space-y-2.5">
-                {/* Interrupt Button (Visible while AI is speaking) */}
-                {aiState === "speaking" && onStopGeneration && (
-                  <div className="flex justify-end">
+            <div className="flex flex-1 flex-col overflow-y-auto pr-0.5 my-1.5 space-y-2">
+              {/* 1. TOP INTERACTIVE CARD: CANDIDATE SPOKEN ANSWER & ENTER BUTTON (ZERO SCROLL UX) */}
+              <div className="rounded-2xl border border-border bg-card p-2.5 shadow-xs space-y-2">
+                {/* Header Row: Microphone status & Quick controls */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                        isSpeechListening && !isMicMuted
+                          ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Mic className="h-3 w-3" />
+                    </div>
+                    <span className="font-semibold text-foreground text-xs">Your Spoken Answer</span>
+                    {isSpeechListening && !isMicMuted ? (
+                      <div className="flex items-center gap-1.5 ml-1">
+                        <div className="flex items-end gap-0.5 h-3" title={`Microphone Level: ${micVolume}%`}>
+                          {[10, 25, 45, 70].map((threshold, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-1 rounded-full transition-all duration-75 ${
+                                micVolume >= threshold
+                                  ? idx === 3
+                                    ? "h-3 bg-amber-400"
+                                    : "h-2.5 bg-emerald-500"
+                                  : "h-1 bg-muted-foreground/30"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {micVolume >= 12 ? `${micVolume}%` : "Clear"}
+                        </span>
+                      </div>
+                    ) : isMicMuted ? (
+                      <span className="text-[10px] text-rose-500 font-medium ml-1">Muted</span>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Interrupt Button (Visible while AI is speaking) */}
+                    {aiState === "speaking" && onStopGeneration && (
+                      <button
+                        type="button"
+                        onClick={onStopGeneration}
+                        className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 transition cursor-pointer"
+                        title={`Interrupt ${interviewerName} to speak`}
+                      >
+                        Interrupt
+                      </button>
+                    )}
+
+                    {/* Mute/Unmute Mic Toggle */}
                     <button
                       type="button"
-                      onClick={onStopGeneration}
-                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/30 transition cursor-pointer"
-                      title={`Interrupt ${interviewerName} to speak`}
+                      onClick={toggleMic}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-medium transition cursor-pointer ${
+                        isMicMuted
+                          ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
+                          : "border-border bg-secondary/50 text-foreground hover:bg-secondary"
+                      }`}
+                      title={isMicMuted ? "Unmute microphone" : "Mute microphone"}
                     >
-                      Interrupt
+                      {isMicMuted ? <MicOff className="h-2.5 w-2.5" /> : <Mic className="h-2.5 w-2.5" />}
+                      <span>{isMicMuted ? "Unmute" : "Mute"}</span>
                     </button>
                   </div>
-                )}
+                </div>
 
-                {/* Central Acoustic Voice Orb */}
+                {/* PROMINENT TOP ENTER BUTTON: Immediately visible at top, zero scrolling */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={finalizeAndSendSpeech}
+                    disabled={!(liveSpeech || liveInterim)}
+                    className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border shadow-xs ${
+                      liveSpeech || liveInterim
+                        ? "bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white border-emerald-400/40 cursor-pointer shadow-emerald-500/25"
+                        : "bg-secondary/40 text-muted-foreground/60 border-border/60 cursor-not-allowed"
+                    }`}
+                    title={
+                      liveSpeech || liveInterim
+                        ? "Click or press Enter ↵ to send your spoken response"
+                        : "Start speaking into the mic to activate Send button"
+                    }
+                  >
+                    <Send className={`h-3.5 w-3.5 ${liveSpeech || liveInterim ? "text-white animate-pulse" : "opacity-40"}`} />
+                    <span>Send Answer</span>
+                    <kbd
+                      className={`px-1.5 py-0.5 text-[10px] rounded font-mono ${
+                        liveSpeech || liveInterim
+                          ? "bg-emerald-950/60 border border-emerald-400/30 text-white"
+                          : "bg-muted text-muted-foreground/60 border border-border/40"
+                      }`}
+                    >
+                      Enter ↵
+                    </kbd>
+                    {isAutoSending && (
+                      <span className="text-[10px] text-amber-200 animate-pulse ml-1 font-normal">
+                        (auto-submitting...)
+                      </span>
+                    )}
+                    {!(liveSpeech || liveInterim) && (
+                      <span className="text-[10px] text-muted-foreground/50 font-normal ml-0.5">
+                        • Speak to activate
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* Real-time Candidate Spoken Transcript Pill */}
+                <div className="min-h-[2.5rem] max-h-20 overflow-y-auto rounded-xl border border-border/80 bg-secondary/30 p-2 text-xs leading-relaxed">
+                  {liveSpeech || liveInterim ? (
+                    <div>
+                      <p className="text-foreground font-medium text-[11px] leading-snug">
+                        "{liveSpeech} <span className="text-muted-foreground italic">{liveInterim}</span>"
+                      </p>
+                      {micVolume < 10 && (liveInterim || liveSpeech) && (
+                        <p className="text-[9px] text-amber-500/90 font-normal mt-0.5">
+                          💡 Tip: Speak closer or louder for maximum clarity
+                        </p>
+                      )}
+                    </div>
+                  ) : isSpeechListening && !isMicMuted ? (
+                    <div className="flex items-center justify-center gap-1.5 text-center text-muted-foreground py-1">
+                      <Sparkles className="h-3 w-3 text-primary animate-pulse" />
+                      <span className="text-[11px] text-foreground font-medium">Listening to your voice...</span>
+                      <span className="text-[10px] text-muted-foreground">Speak or press Enter ↵</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center text-center text-muted-foreground py-1">
+                      <p className="text-[11px]">Microphone is currently paused.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. INTERVIEWER PRESENCE & CLOSED CAPTION CARD (COMPACT) */}
+              <div className={`relative rounded-2xl border border-border bg-gradient-to-b from-secondary/40 via-card to-background p-2.5 shrink-0 shadow-md space-y-2 transition-all duration-700 ${
+                isExiting ? "opacity-0 scale-95 pointer-events-none" : "opacity-100 scale-100"
+              }`}>
+                {/* Central Acoustic Voice Orb (Scaled size 76) */}
                 <VoiceOrb
                   state={
-                    aiState === "speaking"
+                    isExiting
+                      ? "idle"
+                      : aiState === "speaking"
                       ? "speaking"
                       : aiState === "thinking" || isAutoSending
                       ? "thinking"
@@ -1174,178 +1426,29 @@ export function InterviewStageShell({
                       : "idle"
                   }
                   audioLevel={
-                    aiState === "speaking"
+                    isExiting
+                      ? 0
+                      : aiState === "speaking"
                       ? 65
                       : isSpeechListening && !isMicMuted
                       ? Math.max(micVolume * 1.5, liveInterim ? 45 : 0)
                       : 0
                   }
                   examinerName={interviewerName}
-                  size={105}
+                  size={76}
                 />
 
                 {/* Live Spoken Closed Caption (Interviewer's prompt) */}
-                <div className="rounded-xl border border-border/60 bg-background/50 p-2.5 max-h-32 overflow-y-auto">
-                  <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground font-semibold uppercase tracking-wider mb-1">
+                <div className="rounded-xl border border-border/60 bg-background/50 p-2 max-h-20 overflow-y-auto">
+                  <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">
                     <Volume2 className="h-3 w-3 text-emerald-500" />
                     <span>Live Spoken Subtitle</span>
                   </div>
-                  <p className="text-xs leading-relaxed text-foreground font-normal">
+                  <p className="text-[11px] leading-snug text-foreground font-normal">
                     {latestAssistantMsg?.content
-                      ? latestAssistantMsg.content
-                          .replace(/\[STAGE:\s*[1-4]\]/gi, "")
-                          .replace(/\[SWITCH_CATEGORY:\s*[^\]]+\]/gi, "")
-                          .trim()
+                      ? cleanInterviewChatText(latestAssistantMsg.content)
                       : `${interviewerName} is ready to conduct your placement viva.`}
                   </p>
-                </div>
-
-                {/* Instant Send Action right below Subtitle if Candidate is speaking */}
-                {(liveSpeech || liveInterim) && (
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs animate-in fade-in">
-                    <span className="text-emerald-400 font-medium text-[11px] truncate mr-2">
-                      🗣️ "{liveSpeech || liveInterim}"
-                    </span>
-                    <button
-                      type="button"
-                      onClick={finalizeAndSendSpeech}
-                      className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-xs transition cursor-pointer flex items-center gap-1 active:scale-95"
-                    >
-                      <span>Send</span>
-                      <kbd className="text-[9px] bg-emerald-800/80 px-1 py-0.2 rounded font-mono">↵</kbd>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Candidate Voice Interaction Card */}
-              <div className="flex-1 flex flex-col justify-between rounded-2xl border border-border bg-card p-3 shadow-xs space-y-2">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className={`flex h-5 w-5 items-center justify-center rounded-full ${
-                          isSpeechListening && !isMicMuted
-                            ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        <Mic className="h-3 w-3" />
-                      </div>
-                      <span className="font-semibold text-foreground text-xs">Your Spoken Answer</span>
-                      {isSpeechListening && !isMicMuted && (
-                        <div className="flex items-center gap-1.5 ml-1">
-                          <div className="flex items-end gap-0.5 h-3" title={`Microphone Level: ${micVolume}%`}>
-                            {[10, 25, 45, 70].map((threshold, idx) => (
-                              <div
-                                key={idx}
-                                className={`w-1 rounded-full transition-all duration-75 ${
-                                  micVolume >= threshold
-                                    ? idx === 3
-                                      ? "h-3 bg-amber-400"
-                                      : "h-2.5 bg-emerald-500"
-                                    : "h-1 bg-muted-foreground/30"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {micVolume >= 12 ? `${micVolume}%` : "Clear"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {isAutoSending && (
-                        <span className="text-[10px] font-medium text-amber-500 animate-pulse">
-                          Auto-submitting...
-                        </span>
-                      )}
-                      {(liveSpeech || liveInterim) && (
-                        <button
-                          type="button"
-                          onClick={finalizeAndSendSpeech}
-                          className="px-2 py-0.5 rounded-md bg-primary text-primary-foreground text-[10px] font-semibold hover:opacity-90 transition cursor-pointer shadow-xs flex items-center gap-1"
-                        >
-                          <span>Send Now</span>
-                          <kbd className="text-[9px] bg-primary-foreground/20 px-1 py-0.2 rounded">↵</kbd>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Real-time Candidate Spoken Transcript Pill */}
-                  <div className="min-h-[5.5rem] max-h-36 overflow-y-auto rounded-xl border border-border/80 bg-secondary/30 p-2.5 text-xs leading-relaxed">
-                    {liveSpeech || liveInterim ? (
-                      <div>
-                        <p className="text-foreground font-medium">
-                          "{liveSpeech} <span className="text-muted-foreground italic">{liveInterim}</span>"
-                        </p>
-                        {micVolume < 10 && (liveInterim || liveSpeech) && (
-                          <p className="text-[10px] text-amber-500/90 font-normal mt-1 flex items-center gap-1">
-                            <span>💡 Tip: Speak slightly closer or louder for maximum clarity</span>
-                          </p>
-                        )}
-                      </div>
-                    ) : isSpeechListening && !isMicMuted ? (
-                      <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2 space-y-1">
-                        <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                        <p className="text-xs font-medium text-foreground">Listening to your voice...</p>
-                        <p className="text-[10px]">Speak naturally. Adaptive silence auto-submits, or hit Enter ↵ / Send Now.</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-2">
-                        <p className="text-xs">Microphone is currently paused.</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Prominent Send Answer Action when Speech is Present */}
-                  {(liveSpeech || liveInterim) && (
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={finalizeAndSendSpeech}
-                        className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.99] text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer border border-emerald-400/30"
-                      >
-                        <Mic className="h-3.5 w-3.5 animate-pulse" />
-                        <span>Send Spoken Answer</span>
-                        <kbd className="bg-emerald-950/60 border border-emerald-400/30 px-1.5 py-0.5 text-[10px] rounded font-mono">
-                          Enter ↵
-                        </kbd>
-                        {isAutoSending && (
-                          <span className="text-[10px] text-amber-200 animate-pulse ml-1 font-normal">
-                            (auto-submitting...)
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom Voice Station Quick Controls */}
-                <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
-                  <button
-                    type="button"
-                    onClick={toggleMic}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition cursor-pointer ${
-                      isMicMuted
-                        ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
-                        : "border-border bg-secondary/50 text-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    {isMicMuted ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
-                    <span>{isMicMuted ? "Unmute Mic" : "Mute Mic"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("chat")}
-                    className="text-[11px] text-muted-foreground hover:text-foreground font-medium underline-offset-4 hover:underline transition cursor-pointer"
-                  >
-                    Switch to Chat Log
-                  </button>
                 </div>
               </div>
             </div>
@@ -1416,7 +1519,7 @@ export function InterviewStageShell({
                             : "rounded-tr-sm bg-primary text-primary-foreground font-medium"
                         }`}
                       >
-                        {msg.content}
+                        {isAssistant ? cleanInterviewChatText(msg.content) : msg.content}
                       </div>
                     </div>
                   );
@@ -1484,36 +1587,36 @@ export function InterviewStageShell({
           )}
 
           {/* ─── Bottom Widgets (Interview Focus + Next Stage Card) ─── */}
-          <div className="shrink-0 space-y-4 pt-2">
+          <div className="shrink-0 space-y-2 pt-1">
             {/* Widget 1: Interview Focus Checklist */}
-            <div className="border-t border-border pt-3">
-              <div className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <div className="border-t border-border pt-1.5">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-foreground">
                 <Target className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>Interview Focus</span>
               </div>
 
-              <div className="relative pl-4 space-y-2.5 text-xs">
+              <div className="relative pl-3.5 space-y-1 text-[11px]">
                 {/* Vertical line connecting steps */}
-                <div className="absolute left-[7px] top-1.5 bottom-1.5 w-px bg-border" />
+                <div className="absolute left-[6px] top-1 bottom-1 w-px bg-border" />
 
                 {focusItems.map((item, idx) => (
-                  <div key={idx} className="relative flex items-center gap-2.5">
+                  <div key={idx} className="relative flex items-center gap-2">
                     {item.state === "done" ? (
                       <div className="h-3 w-3 rounded-full bg-primary text-primary-foreground flex items-center justify-center z-10">
                         <Check className="w-2 h-2 stroke-[3]" />
                       </div>
                     ) : item.state === "active" ? (
-                      <div className="h-2.5 w-2.5 rounded-full bg-foreground ring-2 ring-foreground/20 z-10" />
+                      <div className="h-2 w-2 rounded-full bg-foreground ring-2 ring-foreground/20 z-10" />
                     ) : (
-                      <div className="h-2.5 w-2.5 rounded-full border border-border bg-card z-10" />
+                      <div className="h-2 w-2 rounded-full border border-border bg-card z-10" />
                     )}
                     <span
                       className={
                         item.state === "active"
-                          ? "font-semibold text-foreground"
+                          ? "font-semibold text-foreground truncate"
                           : item.state === "done"
-                          ? "text-muted-foreground"
-                          : "text-muted-foreground/60"
+                          ? "text-muted-foreground truncate"
+                          : "text-muted-foreground/60 truncate"
                       }
                     >
                       {item.title}
@@ -1524,30 +1627,30 @@ export function InterviewStageShell({
             </div>
 
             {/* Widget 2: Next Stage Teaser Card Button */}
-            <div className="border-t border-border pt-3">
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="border-t border-border pt-1.5">
+              <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 <span>{activeStageNum >= stages.length ? "Finish Session" : "Next Stage"}</span>
               </div>
 
               <button
                 type="button"
-                onClick={activeStageNum >= stages.length ? onEndInterview : onNextStage}
-                className="group flex w-full items-center justify-between rounded-xl border border-border bg-secondary/40 p-3 hover:bg-secondary/70 hover:border-border transition cursor-pointer shadow-xs text-left"
+                onClick={activeStageNum >= stages.length ? handleOpenEndModal : onNextStage}
+                className="group flex w-full items-center justify-between rounded-xl border border-border bg-secondary/40 p-2 hover:bg-secondary/70 hover:border-border transition cursor-pointer shadow-xs text-left"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground group-hover:text-foreground transition">
-                    <nextStageInfo.icon className="h-4 w-4" />
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground group-hover:text-foreground transition shrink-0">
+                    <nextStageInfo.icon className="h-3.5 w-3.5" />
                   </div>
-                  <div>
-                    <span className="block text-xs font-semibold text-foreground">{nextStageInfo.title}</span>
-                    <span className="block text-[11px] text-muted-foreground">
+                  <div className="truncate">
+                    <span className="block text-xs font-semibold text-foreground truncate">{nextStageInfo.title}</span>
+                    <span className="block text-[10px] text-muted-foreground truncate">
                       {nextStageInfo.subtitle}
                     </span>
                   </div>
                 </div>
 
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition" />
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition shrink-0 ml-1" />
               </button>
             </div>
           </div>
@@ -1586,28 +1689,72 @@ export function InterviewStageShell({
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowEndModal(false)}
-                  className="rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition cursor-pointer"
+                  disabled={isExiting}
+                  onClick={() => {
+                    stopAllTTSAudio();
+                    setShowEndModal(false);
+                  }}
+                  className="rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-foreground hover:bg-secondary transition cursor-pointer disabled:opacity-50"
                 >
                   Continue Interview
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowEndModal(false);
-                    onEndInterview();
-                  }}
-                  className={`rounded-lg px-4 py-2 text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
+                  disabled={isExiting}
+                  onClick={handleConfirmEndInterview}
+                  className={`rounded-lg px-4 py-2 text-xs font-semibold text-white transition shadow-xs cursor-pointer disabled:opacity-50 ${
                     isIntroPhase ? "bg-amber-600 hover:bg-amber-500" : "bg-rose-600 hover:bg-rose-500"
                   }`}
                 >
-                  {isIntroPhase ? "End Early (Incomplete)" : "End & View Report"}
+                  {isExiting ? (
+                    <div className="flex items-center gap-1.5">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Ending...</span>
+                    </div>
+                  ) : isIntroPhase ? (
+                    "End Early (Incomplete)"
+                  ) : (
+                    "End & View Report"
+                  )}
                 </button>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* ─── 4. GRACEFUL EXIT & PLACEMENT DOSSIER GENERATION SCREEN ─── */}
+      {isExiting && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background/85 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="flex flex-col items-center text-center max-w-sm px-6 space-y-4">
+            {/* Smooth pulsing beacon */}
+            <div className="relative flex items-center justify-center">
+              <div className="absolute size-20 rounded-full bg-primary/20 animate-ping opacity-60" />
+              <div className="relative size-16 rounded-full border-2 border-primary/50 bg-primary/10 flex items-center justify-center text-primary shadow-lg">
+                <Sparkles className="size-8 text-primary animate-pulse" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-black tracking-tight text-foreground">
+                Concluding Viva Defense...
+              </h3>
+              <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+                Silencing audio streams, finalizing candidate code, and compiling your placement evaluation report.
+              </p>
+            </div>
+
+            {/* Smooth Progress Shimmer */}
+            <div className="w-52 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full animate-pulse w-4/5 transition-all duration-1000" />
+            </div>
+
+            <span className="text-[10px] font-mono text-muted-foreground/80 tracking-wider uppercase">
+              Redirecting to Placement Dossier
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,6 +18,19 @@ import {
 import { useNavigationLoading } from "@/components/navigation-loading-provider";
 import { Badge } from "@/components/ui/badge";
 import { readCache, writeCache } from "@/lib/client-cache";
+import { useInterviewStore } from "@/features/interview/store/interview-store";
+
+const REGIONAL_SPOKEN_LANGUAGES = [
+  { code: "en-IN", label: "English (India)", native: "Indic Accent" },
+  { code: "hi-IN", label: "Hindi", native: "हिंदी" },
+  { code: "kn-IN", label: "Kannada", native: "ಕನ್ನಡ" },
+  { code: "ta-IN", label: "Tamil", native: "தமிழ்" },
+  { code: "te-IN", label: "Telugu", native: "తెలుగు" },
+  { code: "mr-IN", label: "Marathi", native: "मराठी" },
+  { code: "bn-IN", label: "Bengali", native: "বাংলা" },
+  { code: "ml-IN", label: "Malayalam", native: "മലയാളം" },
+  { code: "gu-IN", label: "Gujarati", native: "ગુજરાતી" },
+];
 
 interface StartInterviewModalProps {
   onClose: () => void;
@@ -57,31 +70,33 @@ interface StudentProfileSummary {
 const INTERVIEW_TRACKS = [
   {
     id: "technical",
-    title: "Technical & Project Viva",
-    tagline: "Recommended for Placement",
-    description: "Probes your live project architecture, state management, API design, and system trade-offs.",
+    title: "Technical & Project Deep Dive",
+    tagline: "Probes live code, architecture, and system trade-offs",
+    badge: "Recommended",
+    description: "Evaluates your live project architecture, state management, API design, and system trade-offs.",
     icon: Code2,
     style: "standard",
   },
   {
     id: "behavioral",
     title: "HR & Situational Fit",
-    tagline: "STAR Method",
-    description: "Evaluates teamwork, hackathon leadership, communication, and real-world engineering mindset.",
+    tagline: "Behavioral & cultural fit evaluation",
+    badge: "STAR Method",
+    description: "Evaluates teamwork, leadership, communication, and real-world engineering mindset.",
     icon: UserCheck,
     style: "service",
   },
 ] as const;
 
 const DURATION_OPTIONS = [
-  { value: 15, label: "15 Mins", badge: "Standard Viva" },
+  { value: 15, label: "15 Mins", badge: "Standard" },
   { value: 20, label: "20 Mins", badge: "In-Depth" },
 ] as const;
 
 const DIFFICULTY_OPTIONS = [
-  { value: "medium", label: "Campus Placement", hint: "Standard" },
-  { value: "easy", label: "Entry-Level", hint: "Fresher" },
-  { value: "hard", label: "Top-Tier", hint: "FAANG / Startup" },
+  { value: "medium", label: "Standard", hint: "Medium" },
+  { value: "easy", label: "Fresher", hint: "Easy" },
+  { value: "hard", label: "FAANG", hint: "Hard" },
 ] as const;
 
 /**
@@ -104,6 +119,10 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
 
   // Optional language override toggle
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [spokenLanguage, setSpokenLanguage] = useState<string>(() => {
+    return (typeof window !== "undefined" && localStorage.getItem("interview_pilot_stt_lang")) || "en-IN";
+  });
+  const [showSpokenPicker, setShowSpokenPicker] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,6 +275,8 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
           personalizeWithProfile: true, // Always automatically anchored to verified profile
           provider: "hosted", // Fast high-throughput cloud inference (Groq)
           projectId: selectedProjectId || undefined,
+          voiceId: useInterviewStore.getState().selectedVoiceId || "gnani_nalini",
+          spokenLanguage,
         }),
       });
 
@@ -265,7 +286,13 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
       }
 
       const data = await response.json();
-      const targetUrl = `/interview/${data.interview.id}`;
+      useInterviewStore.getState().setSttLanguage(spokenLanguage);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("interview_pilot_stt_lang", spokenLanguage);
+        } catch {}
+      }
+      const targetUrl = `/interview/${data.interview.id}?lang=${encodeURIComponent(spokenLanguage)}`;
       startNavigation(targetUrl);
       router.push(targetUrl);
     } catch (err) {
@@ -283,83 +310,92 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
   const targetRole = studentProfile?.targetRole || "Full Stack Developer";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Soft ambient backdrop — keeps dashboard softly visible */}
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/35 dark:bg-black/65 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border/80 bg-card p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-border/60">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold tracking-tight text-foreground">
-                Placement Viva Session
-              </h2>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live AI
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              15–20 minute structured evaluation anchored to your verified profile.
-            </p>
+      {/* Slide-over Studio Drawer Panel (Modern engineering console) */}
+      <div className="fixed inset-y-0 right-0 max-w-full flex">
+        <div className="w-screen max-w-md sm:max-w-lg bg-card border-l-2 border-border neo-shadow flex flex-col h-full animate-in slide-in-from-right duration-300 relative shadow-2xl">
+          {/* Top Google Tech 4-Color Stripe */}
+          <div className="h-1.5 w-full grid grid-cols-4 shrink-0 border-b border-border/80">
+            <div className="bg-[#4285F4]"></div>
+            <div className="bg-[#EA4335]"></div>
+            <div className="bg-[#FBBC05]"></div>
+            <div className="bg-[#34A853]"></div>
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
-            aria-label="Close modal"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
 
-        <div className="mt-4 flex flex-col gap-4">
-          {/* Section: Profile Anchor Hero Card */}
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b-2 border-border/80 bg-card shrink-0">
+            <div>
               <div className="flex items-center gap-2">
-                <div className="flex size-6 items-center justify-center rounded-md bg-primary/15 text-primary">
-                  <Sparkles className="size-3.5" />
-                </div>
-                <span className="text-xs font-semibold text-foreground">
-                  Interview Dossier Anchored
+                <h2 className="text-lg font-black tracking-tight text-foreground">
+                  Viva Launch Studio
+                </h2>
+                <span className="bg-[#FF4D4D] text-white px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-xs border border-[#FF4D4D]">
+                  Live Setup
                 </span>
               </div>
-              <Badge variant="outline" className="text-[10px] py-0 h-4 border-primary/30 text-primary">
-                100% Tailored
+              <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                Configure your tailored mock interview session.
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground cursor-pointer"
+              aria-label="Close studio"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Scrollable Configuration Body */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          {/* Section: Profile & Focus Hero Card */}
+          <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3 neo-shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground font-black text-xs">
+                  <Sparkles className="size-3.5" />
+                </div>
+                <span className="text-xs font-black text-foreground uppercase tracking-wider">
+                  Profile &amp; Focus
+                </span>
+              </div>
+              <Badge variant="outline" className="text-[10px] py-0.5 h-auto border-primary/40 text-primary font-bold bg-primary/10">
+                Personalized
               </Badge>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-              <div className="rounded-lg bg-background/60 border border-border/50 p-2">
-                <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+              <div className="rounded-lg bg-background/80 border border-border/80 p-2.5">
+                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-wider">
                   Target Role
                 </span>
-                <span className="font-semibold text-foreground truncate block mt-0.5">
+                <span className="font-bold text-foreground truncate block mt-0.5">
                   {targetRole}
                 </span>
               </div>
 
-              <div className="rounded-lg bg-background/60 border border-border/50 p-2">
+              <div className="rounded-lg bg-background/80 border border-border/80 p-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-medium text-muted-foreground block uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-wider">
                     Featured Project
                   </span>
                   {studentProfile?.projects && studentProfile.projects.length > 1 && (
@@ -436,32 +472,13 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                 )}
               </div>
             </div>
-
-            {detectedSkills.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                <span className="text-[10px] text-muted-foreground">Probed Stack:</span>
-                {detectedSkills.slice(0, 5).map((skill, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center rounded bg-secondary/80 px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground"
-                  >
-                    {skill}
-                  </span>
-                ))}
-                {detectedSkills.length > 5 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{detectedSkills.length - 5} more
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Section: Select Interview Track */}
           <fieldset>
             <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <Briefcase className="size-3.5 text-primary" />
-              <span>Interview Round Track</span>
+              <span>Interview Track</span>
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {INTERVIEW_TRACKS.map((track) => {
@@ -473,7 +490,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                     type="button"
                     disabled={isLoading}
                     onClick={() => setSelectedTrack(track.id)}
-                    className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                    className={`flex flex-col items-start p-3.5 rounded-xl border-2 text-left transition-all ${
                       isLoading ? "pointer-events-none opacity-60" : "cursor-pointer"
                     } ${
                       isSelected
@@ -482,28 +499,30 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2">
-                        <IconComponent
-                          className={`size-4 ${
-                            isSelected ? "text-primary" : "text-muted-foreground"
-                          }`}
-                        />
-                        <span
-                          className={`text-xs font-bold leading-tight ${
-                            isSelected ? "text-primary" : "text-foreground"
-                          }`}
-                        >
-                          {track.title}
-                        </span>
-                      </div>
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                        isSelected ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                      }`}>
+                        {track.badge}
+                      </span>
                       {isSelected && (
                         <Check className="size-3.5 text-primary shrink-0 ml-1" />
                       )}
                     </div>
-                    <span className="mt-1 text-[10px] font-semibold text-primary/80">
-                      {track.tagline}
-                    </span>
-                    <p className="mt-1 text-[11px] text-muted-foreground leading-snug">
+                    <div className="flex items-center gap-2 mt-2">
+                      <IconComponent
+                        className={`size-4 shrink-0 ${
+                          isSelected ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-bold leading-tight ${
+                          isSelected ? "text-primary" : "text-foreground"
+                        }`}
+                      >
+                        {track.title}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
                       {track.description}
                     </p>
                   </button>
@@ -517,7 +536,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
             {/* Duration */}
             <fieldset>
               <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Session Duration
+                Duration
               </legend>
               <div className="grid grid-cols-2 gap-1.5">
                 {DURATION_OPTIONS.map((dur) => (
@@ -526,19 +545,19 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                     type="button"
                     disabled={isLoading}
                     onClick={() => setDuration(dur.value)}
-                    className={`flex flex-col items-center justify-center py-2 px-2 rounded-lg border text-xs font-semibold transition-all ${
+                    className={`flex flex-col items-center justify-center py-2 px-1.5 rounded-lg border text-xs font-semibold transition-all min-w-0 w-full overflow-hidden ${
                       isLoading ? "pointer-events-none opacity-60" : "cursor-pointer"
                     } ${
                       duration === dur.value
-                        ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                        ? "border-primary bg-primary text-primary-foreground shadow-xs font-bold"
                         : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground bg-card"
                     }`}
                   >
-                    <span>{dur.label}</span>
+                    <span className="truncate w-full text-center font-bold">{dur.label}</span>
                     <span
-                      className={`text-[9px] font-normal ${
+                      className={`text-[9px] font-normal truncate w-full text-center ${
                         duration === dur.value
-                          ? "text-primary-foreground/80"
+                          ? "text-primary-foreground/80 font-medium"
                           : "text-muted-foreground"
                       }`}
                     >
@@ -549,10 +568,10 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
               </div>
             </fieldset>
 
-            {/* Difficulty */}
+            {/* Difficulty Level */}
             <fieldset>
               <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Evaluation Rigor
+                Difficulty Level
               </legend>
               <div className="grid grid-cols-3 gap-1.5">
                 {DIFFICULTY_OPTIONS.map((diff) => (
@@ -561,23 +580,23 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                     type="button"
                     disabled={isLoading}
                     onClick={() => setDifficulty(diff.value)}
-                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border text-xs font-semibold transition-all ${
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border text-xs font-semibold transition-all min-w-0 w-full overflow-hidden ${
                       isLoading ? "pointer-events-none opacity-60" : "cursor-pointer"
                     } ${
                       difficulty === diff.value
-                        ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                        ? "border-primary bg-primary text-primary-foreground shadow-xs font-bold"
                         : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground bg-card"
                     }`}
                   >
-                    <span className="truncate">{diff.hint}</span>
+                    <span className="truncate w-full text-center px-0.5 font-bold">{diff.label}</span>
                     <span
-                      className={`text-[9px] font-normal capitalize ${
+                      className={`text-[9px] font-medium truncate w-full text-center ${
                         difficulty === diff.value
-                          ? "text-primary-foreground/80"
+                          ? "text-primary-foreground/90 font-semibold"
                           : "text-muted-foreground"
                       }`}
                     >
-                      {diff.value}
+                      {diff.hint}
                     </span>
                   </button>
                 ))}
@@ -586,14 +605,14 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
           </div>
 
           {/* Section: Auto-detected Language & Change Language toggle */}
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/30 border border-border/50 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-muted/30 border border-border/80 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1.5 truncate">
               <Code2 className="size-3.5 text-primary shrink-0" />
               <span>
                 Coding Language:{" "}
                 <strong className="text-foreground capitalize">{language}</strong>{" "}
-                <span className="text-[10px] text-muted-foreground/80">
-                  (auto-detected from stack)
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  (auto-anchored from repo stack)
                 </span>
               </span>
             </div>
@@ -601,7 +620,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
             <button
               type="button"
               onClick={() => setShowLanguagePicker(!showLanguagePicker)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline cursor-pointer ml-2 shrink-0"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer ml-2 shrink-0"
             >
               <span>{showLanguagePicker ? "Close" : "Change Language"}</span>
               {showLanguagePicker ? (
@@ -612,7 +631,7 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
             </button>
           </div>
 
-          {/* Section: Collapsible Language Override (Clean, simple, no Ollama jargon) */}
+          {/* Section: Collapsible Language Override */}
           {showLanguagePicker && (
             <div className="rounded-xl border border-border bg-muted/20 p-3 animate-in fade-in-50 duration-200">
               <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -640,23 +659,89 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
               </div>
             </div>
           )}
+
+          {/* Section: Spoken Viva Language */}
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-muted/30 border border-border/80 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1.5 truncate">
+              <Globe className="size-3.5 text-primary shrink-0" />
+              <span>
+                Spoken Viva Language:{" "}
+                <strong className="text-foreground">
+                  {REGIONAL_SPOKEN_LANGUAGES.find((l) => l.code === spokenLanguage)?.label || "English (India)"}
+                </strong>{" "}
+                <span className="text-muted-foreground font-medium">
+                  ({REGIONAL_SPOKEN_LANGUAGES.find((l) => l.code === spokenLanguage)?.native})
+                </span>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowSpokenPicker(!showSpokenPicker)}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline cursor-pointer ml-2 shrink-0"
+            >
+              <span>{showSpokenPicker ? "Close" : "Change Spoken Language"}</span>
+              {showSpokenPicker ? (
+                <ChevronUp className="size-3" />
+              ) : (
+                <ChevronDown className="size-3" />
+              )}
+            </button>
+          </div>
+
+          {showSpokenPicker && (
+            <div className="rounded-xl border border-border bg-muted/20 p-3 animate-in fade-in-50 duration-200">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                Select Spoken Language
+              </span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {REGIONAL_SPOKEN_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => {
+                      setSpokenLanguage(lang.code);
+                      if (typeof window !== "undefined") {
+                        try {
+                          localStorage.setItem("interview_pilot_stt_lang", lang.code);
+                        } catch {}
+                      }
+                      useInterviewStore.getState().setSttLanguage(lang.code);
+                      setShowSpokenPicker(false);
+                    }}
+                    className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-md border text-xs transition-colors cursor-pointer ${
+                      spokenLanguage === lang.code
+                        ? "border-primary bg-primary text-primary-foreground font-semibold shadow-xs"
+                        : "border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                    }`}
+                  >
+                    <span className="font-medium truncate w-full text-center">{lang.label}</span>
+                    <span className={`text-[10px] truncate w-full text-center ${spokenLanguage === lang.code ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      {lang.native}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Error Notification */}
+          {error && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-destructive/10 border-2 border-destructive/20 p-3 text-xs text-destructive font-medium">
+              <AlertCircle className="size-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
         </div>
 
-        {/* Error Notification */}
-        {error && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
-            <AlertCircle className="size-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="mt-5 pt-4 border-t border-border/60 flex items-center justify-between gap-3">
+        {/* Sticky Actions Footer */}
+        <div className="px-6 py-4 border-t-2 border-border/80 bg-card/90 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="h-9 rounded-lg px-4 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer disabled:opacity-40"
+            className="h-10 rounded-xl px-4 text-xs font-bold text-muted-foreground transition-colors hover:text-foreground cursor-pointer disabled:opacity-40"
           >
             Cancel
           </button>
@@ -665,19 +750,20 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
             type="button"
             onClick={handleStart}
             disabled={isLoading}
-            className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-6 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer disabled:opacity-50 disabled:cursor-wait shadow-sm"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-xs font-black text-primary-foreground border-2 border-primary/80 neo-shadow-sm transition-all hover:translate-x-0.5 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           >
             {isLoading ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin shrink-0" />
-                <span>Initializing Interviewer...</span>
+                <span>Starting Interview...</span>
               </>
             ) : (
-              `Start ${duration}-Min Placement Viva 🚀`
+              `Start Interview (${duration}m)`
             )}
           </button>
         </div>
       </div>
     </div>
+  </div>
   );
 }

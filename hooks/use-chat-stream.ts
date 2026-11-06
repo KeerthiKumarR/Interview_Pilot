@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { readSSEStream } from "@/lib/sse-utils";
+import { cleanInterviewChatText } from "@/lib/utils";
 
 interface UseChatStreamOptions {
   
@@ -253,16 +254,20 @@ export function useChatStream(options: UseChatStreamOptions) {
           // onToken
           (token, isReasoning) => {
             resetTimeout();
-            const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-            const nextContent = (currentMsg?.content ?? "") + token;
-            useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, nextContent);
+            // Do not append raw internal reasoning tokens to the candidate's visible chat bubble
+            if (!isReasoning) {
+              const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
+              const nextContent = cleanInterviewChatText((currentMsg?.content ?? "") + token);
+              useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, nextContent);
+            }
             options.onToken?.(token, isReasoning);
           },
           // onDone
           async (fullText) => {
             clearTimeout(timeoutIdRef.current);
             const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-            const textToUse = fullText || (currentMsg?.content ?? "");
+            const rawText = fullText || (currentMsg?.content ?? "");
+            const textToUse = cleanInterviewChatText(rawText);
             
             useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, textToUse);
             const didPasteSuccessfully = textToUse.trim().length > 0;

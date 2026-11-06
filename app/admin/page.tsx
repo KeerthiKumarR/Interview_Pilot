@@ -202,10 +202,55 @@ export default function AdminUsersPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen bg-background text-foreground overflow-hidden">
         <Sidebar />
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground animate-pulse">Loading Platform Members & Users...</p>
+        <div className="flex-1 overflow-auto p-6 md:p-10 space-y-8 animate-pulse">
+          {/* Header Skeleton */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-8 w-64 bg-muted/60 rounded-md" />
+              <div className="h-4 w-96 bg-muted/40 rounded-md" />
+            </div>
+          </div>
+
+          {/* KPI Cards Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
+                <div className="h-3 w-24 bg-muted/50 rounded" />
+                <div className="h-8 w-16 bg-muted/70 rounded" />
+                <div className="h-3 w-32 bg-muted/40 rounded" />
+              </div>
+            ))}
+          </div>
+
+          {/* Search & Filter Bar Skeleton */}
+          <div className="flex flex-col md:flex-row gap-4 justify-between">
+            <div className="h-9 w-72 bg-muted/50 rounded-lg" />
+            <div className="h-9 w-64 bg-muted/50 rounded-lg" />
+          </div>
+
+          {/* Table Skeleton */}
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="p-4 border-b border-border bg-muted/20">
+              <div className="h-4 w-40 bg-muted/50 rounded" />
+            </div>
+            <div className="divide-y divide-border">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-muted/60 shrink-0" />
+                    <div className="space-y-1.5">
+                      <div className="h-4 w-36 bg-muted/60 rounded" />
+                      <div className="h-3 w-48 bg-muted/40 rounded" />
+                    </div>
+                  </div>
+                  <div className="h-6 w-20 bg-muted/50 rounded-full" />
+                  <div className="h-8 w-24 bg-muted/50 rounded-md" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

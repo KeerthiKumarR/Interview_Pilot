@@ -46,7 +46,8 @@ export async function getAuthenticatedUser(): Promise<User | null> {
         where: { clerkId },
       });
 
-      if (!user) {
+      // If user is not yet created or missing their Google profile avatar, sync from Clerk
+      if (!user || !user.imageUrl) {
         try {
           const clerk = await clerkClient();
           const cu = await clerk.users.getUser(clerkId);
@@ -56,12 +57,12 @@ export async function getAuthenticatedUser(): Promise<User | null> {
 
           user = await prisma.user.upsert({
             where: { email },
-            update: { clerkId, name, imageUrl },
+            update: { clerkId, name, ...(imageUrl ? { imageUrl } : {}) },
             create: { clerkId, email, name, imageUrl },
           });
         } catch (error) {
           console.error("Failed to auto-sync user with Clerk:", error);
-          return null;
+          if (!user) return null;
         }
       }
 

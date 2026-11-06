@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/features/admin/components/sidebar";
 import { useAdminNotifications } from "@/features/admin/components/admin-notification-system";
+import { useCachedData, invalidateCache } from "@/lib/client-cache";
 import {
   FileCode2,
   Code2,
@@ -76,9 +77,13 @@ const SUPPORTED_LANGUAGES = [
 export default function UploadQuestionsPage() {
   const { notify } = useAdminNotifications();
 
-  // Data states
-  const [questions, setQuestions] = useState<QuestionBankItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Data states via zero-lag client cache
+  const { data: cacheData, loading: isCacheLoading, refresh: refreshQuestions } = useCachedData<{ questions: QuestionBankItem[]; total: number }>("/api/admin/question-bank");
+  const [localQuestions, setLocalQuestions] = useState<QuestionBankItem[] | null>(null);
+
+  const questions = localQuestions ?? cacheData?.questions ?? [];
+  const loading = isCacheLoading && !cacheData;
+
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -128,27 +133,11 @@ export default function UploadQuestionsPage() {
     go: "func twoSum(nums []int, target int) []int {\n    // Your code here\n    return nil\n}",
   });
 
-  // Fetch questions from API
+  // Re-fetch questions with cache invalidation
   const fetchQuestions = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/admin/question-bank");
-      const data = await res.json();
-      if (res.ok && data.questions) {
-        setQuestions(data.questions);
-      } else {
-        notify("error", "Failed to load question bank", data.error || "Unknown error");
-      }
-    } catch (err) {
-      notify("error", "Network Error", "Unable to reach question bank endpoint.");
-    } finally {
-      setLoading(false);
-    }
+    invalidateCache("/api/admin/question-bank");
+    await refreshQuestions();
   };
-
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
 
   // Reset form to defaults
   const resetForm = () => {
@@ -204,7 +193,8 @@ export default function UploadQuestionsPage() {
       const res = await fetch(`/api/admin/question-bank?id=${id}`, { method: "DELETE" });
       const data = await res.json();
       if (res.ok) {
-        setQuestions((prev) => prev.filter((item) => item.id !== id));
+        setLocalQuestions(questions.filter((item) => item.id !== id));
+        invalidateCache("/api/admin/question-bank");
         notify("success", "Question Deleted", `"${title}" was removed from the bank.`);
       } else {
         notify("error", "Delete Failed", data.error || "Could not delete question.");
@@ -263,7 +253,9 @@ export default function UploadQuestionsPage() {
         const data = await res.json();
         if (res.ok && data.question) {
           notify("success", "Question Updated", `"${data.question.title}" has been saved.`);
-          fetchQuestions();
+          invalidateCache("/api/admin/question-bank");
+          setLocalQuestions(null);
+          await refreshQuestions();
           setActiveMode("list");
           resetForm();
         } else {
@@ -278,7 +270,9 @@ export default function UploadQuestionsPage() {
         const data = await res.json();
         if (res.ok && data.question) {
           notify("success", "Question Created", `"${data.question.title}" added to Question Bank.`);
-          fetchQuestions();
+          invalidateCache("/api/admin/question-bank");
+          setLocalQuestions(null);
+          await refreshQuestions();
           setActiveMode("list");
           resetForm();
         } else {
@@ -387,15 +381,27 @@ export default function UploadQuestionsPage() {
           <div className="px-6 py-4 border-b border-border bg-secondary/20 grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-3 rounded-lg border border-border bg-card/60">
               <span className="text-xs text-muted-foreground block">Total Bank Questions</span>
-              <span className="text-lg font-bold text-foreground mt-0.5 block">{questions.length}</span>
+              {loading ? (
+                <div className="h-6 w-12 bg-muted/60 animate-pulse rounded mt-1" />
+              ) : (
+                <span className="text-lg font-bold text-foreground mt-0.5 block">{questions.length}</span>
+              )}
             </div>
             <div className="p-3 rounded-lg border border-border bg-card/60">
               <span className="text-xs text-muted-foreground block">Coding Challenges</span>
-              <span className="text-lg font-bold text-primary mt-0.5 block">{totalCoding}</span>
+              {loading ? (
+                <div className="h-6 w-12 bg-muted/60 animate-pulse rounded mt-1" />
+              ) : (
+                <span className="text-lg font-bold text-primary mt-0.5 block">{totalCoding}</span>
+              )}
             </div>
             <div className="p-3 rounded-lg border border-border bg-card/60">
               <span className="text-xs text-muted-foreground block">Option Quizzes</span>
-              <span className="text-lg font-bold text-emerald-500 mt-0.5 block">{totalQuiz}</span>
+              {loading ? (
+                <div className="h-6 w-12 bg-muted/60 animate-pulse rounded mt-1" />
+              ) : (
+                <span className="text-lg font-bold text-emerald-500 mt-0.5 block">{totalQuiz}</span>
+              )}
             </div>
             <div className="p-3 rounded-lg border border-border bg-card/60">
               <span className="text-xs text-muted-foreground block">Studio Integration</span>
@@ -462,9 +468,21 @@ export default function UploadQuestionsPage() {
 
             {/* Questions Grid */}
             {loading ? (
-              <div className="py-20 text-center text-muted-foreground space-y-2">
-                <RotateCw className="w-6 h-6 animate-spin mx-auto text-primary" />
-                <p className="text-xs">Loading Question Bank items...</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="p-5 rounded-xl border border-border bg-card/60 animate-pulse space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div className="h-5 w-24 bg-muted/60 rounded-full" />
+                      <div className="h-4 w-12 bg-muted/40 rounded" />
+                    </div>
+                    <div className="h-5 w-3/4 bg-muted/70 rounded" />
+                    <div className="h-10 w-full bg-muted/30 rounded" />
+                    <div className="flex gap-2 pt-2">
+                      <div className="h-4 w-16 bg-muted/50 rounded" />
+                      <div className="h-4 w-16 bg-muted/50 rounded" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredQuestions.length === 0 ? (
               <div className="py-20 text-center border border-dashed border-border rounded-xl bg-card/40 space-y-3">

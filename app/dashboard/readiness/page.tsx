@@ -69,8 +69,8 @@ export default function PlacementReadinessPage() {
       {isLoading ? (
         <ReadinessSkeleton />
       ) : !data ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center bg-card/30">
-          <p className="text-sm text-muted-foreground">
+        <div className="rounded-2xl border-2 border-dashed border-border p-8 text-center bg-card neo-shadow-sm">
+          <p className="text-sm font-medium text-muted-foreground">
             Unable to load readiness data. Please verify your connection.
           </p>
           <Button
@@ -78,41 +78,40 @@ export default function PlacementReadinessPage() {
             variant="outline"
             size="sm"
             onClick={() => fetchReadiness(true)}
-            className="mt-3"
+            className="mt-3 rounded-xl border-2 border-border font-bold neo-shadow-sm"
           >
             Retry
           </Button>
         </div>
       ) : (
         <div className="space-y-8">
-          {/* Section Header */}
+          {/* Section Header with Creative Neo-Brutalist Badges */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Placement Readiness Scorecard
-                </h1>
-                <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  <Sparkles className="size-3" />
-                  Campus Benchmark
-                </span>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-card px-3 py-0.5 text-xs font-black text-foreground shadow-xs">
+                <span className="size-2 rounded-full bg-[#34A853] animate-ping" />
+                <span>Placement Benchmark Metric</span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+                Readiness{" "}
+                <span className="inline-block bg-[#34A853] text-white px-3 py-0.5 rounded-xl border-2 border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,0.7)] rotate-[-1deg] mx-1">
+                  Scorecard
+                </span>
+              </h1>
+              <p className="text-sm text-muted-foreground font-medium max-w-xl">
                 Live multi-dimensional ranking calculated from your resume, GitHub projects, and mock interview performance.
               </p>
             </div>
 
-            <Button
+            <button
               type="button"
-              variant="outline"
-              size="sm"
               onClick={() => fetchReadiness(true)}
               disabled={isRefreshing}
-              className="gap-2 shrink-0 self-start sm:self-auto cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl border-2 border-border bg-card px-4 py-2.5 text-xs font-black text-foreground neo-shadow-sm hover:translate-x-0.5 hover:-translate-y-0.5 transition-all shrink-0 cursor-pointer disabled:opacity-50"
             >
               <RotateCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              Recalculate Score
-            </Button>
+              <span>Recalculate Score</span>
+            </button>
           </div>
 
           {/* 1. Hero Scorecard Card */}
@@ -127,6 +126,16 @@ export default function PlacementReadinessPage() {
 
           {/* 3. The 7-Component Weighted Breakdown */}
           <ReadinessBreakdownCard components={data.components} />
+
+          {/* 4. Recruiter Insight "Remember" Callout */}
+          <div className="rounded-2xl border-2 border-black dark:border-border bg-neutral-950 p-4 text-white flex items-center gap-3.5 neo-shadow">
+            <span className="shrink-0 bg-[#FF4D4D] text-white font-black text-xs px-2.5 py-1 rounded-lg border border-black uppercase tracking-wider shadow-xs">
+              Remember
+            </span>
+            <p className="text-xs sm:text-sm font-medium text-stone-200 leading-snug">
+              Crossing the 75/100 threshold elevates your profile into the top placement screening tier, unlocking direct recruiter match recommendations.
+            </p>
+          </div>
         </div>
       )}
     </div>

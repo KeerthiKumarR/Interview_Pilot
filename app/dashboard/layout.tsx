@@ -26,17 +26,22 @@ export default async function DashboardLayout({
   const isStaff = role === "staff" || isAdmin;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground bg-dot-grid-subtle">
+      {/* Top Google Tech 4-Color Accent Stripe (Inspired by Image 2) */}
+      <div className="h-1.5 w-full grid grid-cols-4 shrink-0 border-b border-border/80">
+        <div className="bg-[#4285F4]"></div>
+        <div className="bg-[#EA4335]"></div>
+        <div className="bg-[#FBBC05]"></div>
+        <div className="bg-[#34A853]"></div>
+      </div>
+
       {/* Top Navigation */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6 bg-background">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b-2 border-border px-6 bg-card/85 backdrop-blur-md">
         {/* Left: Logo & Branding */}
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="flex items-center gap-2.5">
             <MiraiLogo size={28} showText={true} textClassName="text-sm font-bold tracking-tight text-foreground" />
           </Link>
-          <Badge variant="secondary" className="hidden sm:inline-flex text-[10px] py-0 px-1.5 font-semibold">
-            MSOT
-          </Badge>
         </div>
 
         {/* Right: Module Navigation & User controls */}
@@ -45,28 +50,28 @@ export default async function DashboardLayout({
             <Link
               href="/dashboard"
               prefetch={true}
-              className="text-muted-foreground hover:text-foreground transition-colors font-semibold"
+              className="text-foreground hover:text-primary transition-colors font-bold px-2 py-1 rounded-lg bg-secondary/60"
             >
               Mock Interview
             </Link>
             <Link
               href="/dashboard/profile-intake"
               prefetch={true}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium px-2 py-1"
             >
               Profile & Review
             </Link>
             <Link
               href="/dashboard/readiness"
               prefetch={true}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium px-2 py-1"
             >
               Readiness Score
             </Link>
             <Link
               href="/dashboard/jobs"
               prefetch={true}
-              className="text-muted-foreground hover:text-foreground transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors font-medium px-2 py-1"
             >
               Jobs & Drives
             </Link>
@@ -74,7 +79,7 @@ export default async function DashboardLayout({
               <Link
                 href="/admin/jobs"
                 prefetch={true}
-                className="text-primary font-semibold hover:underline transition-colors"
+                className="text-primary font-bold hover:underline transition-colors px-2 py-1"
               >
                 MSOT Staff Board
               </Link>
@@ -83,7 +88,7 @@ export default async function DashboardLayout({
               <Link
                 href="/admin"
                 prefetch={true}
-                className="text-amber-600 dark:text-amber-400 font-semibold hover:underline transition-colors"
+                className="text-amber-600 dark:text-amber-400 font-bold hover:underline transition-colors px-2 py-1"
               >
                 Admin
               </Link>
@@ -97,7 +102,7 @@ export default async function DashboardLayout({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 bg-background">{children}</main>
+      <main className="flex-1">{children}</main>
     </div>
   );
 }

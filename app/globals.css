@@ -216,6 +216,30 @@
     @apply flex-1 overflow-hidden rounded-lg border border-border;
   }
 
+  /* Technical Blueprint Dot Grid (Inspired by Image 2) */
+  .bg-dot-grid {
+    background-image: radial-gradient(var(--border) 1.2px, transparent 1.2px);
+    background-size: 20px 20px;
+  }
+  .bg-dot-grid-subtle {
+    background-image: radial-gradient(color-mix(in srgb, var(--border) 60%, transparent) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+
+  /* Neo-Brutalist Micro-Shadows */
+  .neo-shadow {
+    box-shadow: 3.5px 3.5px 0px 0px rgba(0, 0, 0, 0.9);
+  }
+  .dark .neo-shadow {
+    box-shadow: 3.5px 3.5px 0px 0px rgba(255, 255, 255, 0.22);
+  }
+  .neo-shadow-sm {
+    box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.9);
+  }
+  .dark .neo-shadow-sm {
+    box-shadow: 2px 2px 0px 0px rgba(255, 255, 255, 0.22);
+  }
+
   /* Indeterminate top loading bar */
   @keyframes indeterminate-bar {
     0% {

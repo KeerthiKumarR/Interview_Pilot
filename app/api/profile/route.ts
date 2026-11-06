@@ -13,7 +13,7 @@ interface CachedProfileResponse {
 
 const profileMemoryCache = new Map<string, CachedProfileResponse>();
 
-export function invalidateProfileCache(userId?: string) {
+function invalidateProfileCache(userId?: string) {
   if (userId) {
     profileMemoryCache.delete(userId);
   } else {

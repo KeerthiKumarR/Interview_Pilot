@@ -210,56 +210,15 @@ export interface VoiceOption {
 }
 
 /**
- * Returns supported Indian-named voices filtered by target TTS model.
+ * Returns supported Indic voice models exclusively powered by Gnani.ai Timbre.
  */
-export function getAvailableVoices(model?: string): VoiceOption[] {
-  const allVoices: VoiceOption[] = [
-    // ── Local System Voices (Browser Native Engine - $0 cost, 0ms latency) ────
-    { id: "local_female", name: "Ananya", label: "WebSpeech Female (Browser Native - 0ms Latency)", gender: "female", engine: "Local" },
-    { id: "local_male", name: "Aarav", label: "WebSpeech Male (Browser Native - 0ms Latency)", gender: "male", engine: "Local" },
-
-    // ── Kokoro 82M Voices (Kokoro Engine) ──────────────────────────
-    { id: "af_heart", name: "Ananya", label: "Ananya (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "af_bella", name: "Diya", label: "Diya (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "af_sarah", name: "Isha", label: "Isha (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "af_nicole", name: "Kavya", label: "Kavya (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "af_sky", name: "Meera", label: "Meera (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "if_sara", name: "Priya", label: "Priya (Kokoro Female)", gender: "female", engine: "Kokoro" },
-    { id: "am_adam", name: "Aarav", label: "Aarav (Kokoro Male)", gender: "male", engine: "Kokoro" },
-    { id: "am_michael", name: "Rohan", label: "Rohan (Kokoro Male)", gender: "male", engine: "Kokoro" },
-    { id: "am_fenrir", name: "Vikram", label: "Vikram (Kokoro Male)", gender: "male", engine: "Kokoro" },
-    { id: "am_puck", name: "Kabir", label: "Kabir (Kokoro Male)", gender: "male", engine: "Kokoro" },
-    { id: "am_echo", name: "Aditya", label: "Aditya (Kokoro Male)", gender: "male", engine: "Kokoro" },
-
-    // ── MiniMax Voices (MiniMax Engine) ────────────────────────────
-    { id: "minimax_female_shaonv", name: "Riya", label: "Riya (MiniMax Female)", gender: "female", engine: "MiniMax" },
-    { id: "minimax_female_yujie", name: "Sanya", label: "Sanya (MiniMax Female)", gender: "female", engine: "MiniMax" },
-    { id: "minimax_male_presenter", name: "Dev", label: "Dev (MiniMax Male)", gender: "male", engine: "MiniMax" },
-
-    // ── Gemini / OpenAI Voices (Gemini Engine) ─────────────────────
-    { id: "gemini_nova", name: "Tara", label: "Tara (Gemini Female)", gender: "female", engine: "Gemini" },
-    { id: "gemini_shimmer", name: "Neha", label: "Neha (Gemini Female)", gender: "female", engine: "Gemini" },
-    { id: "gemini_alloy", name: "Neer", label: "Neer (Gemini Male)", gender: "male", engine: "Gemini" },
-    { id: "gemini_echo", name: "Siddharth", label: "Siddharth (Gemini Male)", gender: "male", engine: "Gemini" },
-    { id: "gemini_onyx", name: "Varun", label: "Varun (Gemini Male)", gender: "male", engine: "Gemini" },
+export function getAvailableVoices(_model?: string): VoiceOption[] {
+  return [
+    // ── Real Indic Voice Personas (Gnani Timbre & Web Speech) ─────────────────
+    { id: "gnani_nalini", name: "Nalini", label: "Nalini (Female · Professional & Clear)", gender: "female", engine: "Gnani Timbre" },
+    { id: "gnani_arun", name: "Arun", label: "Arun (Male · Technical Lead & Confident)", gender: "male", engine: "Gnani Timbre" },
+    { id: "gnani_pooja", name: "Pooja", label: "Pooja (Female · Conversational & Warm)", gender: "female", engine: "Gnani Timbre" },
   ];
-
-  if (!model || model === "auto") {
-    return allVoices;
-  }
-
-  const lower = model.toLowerCase();
-  let filtered = allVoices;
-
-  if (lower.includes("kokoro")) {
-    filtered = allVoices.filter((v) => v.engine === "Kokoro" || v.engine === "Local");
-  } else if (lower.includes("minimax")) {
-    filtered = allVoices.filter((v) => v.engine === "MiniMax" || v.engine === "Local");
-  } else if (lower.includes("gemini") || lower.includes("openai")) {
-    filtered = allVoices.filter((v) => v.engine === "Gemini" || v.engine === "Local");
-  }
-
-  return filtered;
 }
 
 function getDefaultVoiceList(): VoiceOption[] {
@@ -287,7 +246,8 @@ export function getVoiceGender(voiceId?: string | null): "male" | "female" {
     lower.includes("female") ||
     lower === "gemini_nova" ||
     lower === "gemini_shimmer" ||
-    lower.includes("ananya") ||
+    lower.includes("nalini") ||
+    lower.includes("pooja") ||
     lower.includes("diya") ||
     lower.includes("isha") ||
     lower.includes("kavya") ||
@@ -305,20 +265,33 @@ export function getVoiceGender(voiceId?: string | null): "male" | "female" {
 }
 
 /**
- * Guaranteed selector for natural male voices (prioritizing Indian English and clear male voices).
- * Ensures Aarav, Rohan, Vikram, Dev, and Neer sound like clear, confident male interviewers.
+ * Resolves the interviewer persona name based on voiceId and gender.
+ * Female voices -> Nalini (or Pooja)
+ * Male voices -> Arun
  */
-export function getBestMaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+export function getInterviewerNameForVoice(voiceId?: string | null): string {
+  if (!voiceId) return "Nalini";
+  const lower = voiceId.toLowerCase();
+  if (lower.includes("pooja")) return "Pooja";
+  if (getVoiceGender(voiceId) === "male") return "Arun";
+  return "Nalini";
+}
+
+/**
+ * Guaranteed selector for natural male voices (prioritizing Indian English and clear male voices).
+ * Ensures Arun, Rohan, Vikram, Dev, and Ramesh sound like clear, confident male interviewers.
+ */
+export function getBestMaleVoice(voices?: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
   const list = voices && voices.length > 0 ? voices : window.speechSynthesis.getVoices();
   if (!list || list.length === 0) return null;
 
   // Strict list of female names to NEVER assign to a male interviewer
   const femaleNames = [
-    "ananya", "diya", "isha", "kavya", "meera", "priya", "tara", "neha", "riya", "sanya",
+    "nalini", "pooja", "diya", "isha", "kavya", "meera", "priya", "tara", "neha", "riya", "sanya",
     "samantha", "victoria", "karen", "kathy", "shelley", "flo", "sandy", "moira", "tessa",
     "fiona", "zira", "hazel", "catherine", "allison", "ava", "stephanie", "zoe", "jenny", "aria",
-    "female", "veena", "sangeeta", "aditi", "lekha", "pooja", "serena"
+    "female", "veena", "sangeeta", "aditi", "lekha", "serena"
   ];
 
   const isFemaleVoice = (voiceName: string) => {
@@ -326,8 +299,18 @@ export function getBestMaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthes
     return femaleNames.some((f) => lower.includes(f));
   };
 
+  // 0. High priority: Regional language voice matching preferredLang (e.g. Hindi, Kannada, Tamil, etc.)
+  if (preferredLang && !preferredLang.startsWith("en")) {
+    const langPrefix = preferredLang.split("-")[0].toLowerCase();
+    const regionalVoice = list.find((v) => {
+      const l = v.lang.toLowerCase();
+      return (l.startsWith(langPrefix) || l.includes(langPrefix)) && !isFemaleVoice(v.name);
+    });
+    if (regionalVoice) return regionalVoice;
+  }
+
   // 1. High priority: Verified Indian English male voices (e.g. Rishi en-IN, Prabhat, Aman)
-  const indianMaleNames = ["rishi", "prabhat", "aman", "aarav", "rohan", "vikram", "kabir", "neer", "dev", "male"];
+  const indianMaleNames = ["rishi", "prabhat", "aman", "arun", "ramesh", "rohan", "vikram", "kabir", "neer", "dev", "male"];
   const indianMale = list.find((v) => {
     const n = v.name.toLowerCase();
     const l = v.lang.toLowerCase();
@@ -367,16 +350,16 @@ export function getBestMaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthes
 
 /**
  * Guaranteed selector for natural female voices (prioritizing Indian English and clear female voices).
- * Ensures Ananya never sounds like a deep male voice.
+ * Ensures female interviewer personas (Nalini, Pooja) never sound like a deep male voice.
  */
-export function getBestFemaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+export function getBestFemaleVoice(voices?: SpeechSynthesisVoice[], preferredLang?: string): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
   const list = voices && voices.length > 0 ? voices : window.speechSynthesis.getVoices();
   if (!list || list.length === 0) return null;
 
-  // Strict list of known male voice identifiers to never assign to Ananya
+  // Strict list of known male voice identifiers to never assign to female interviewers
   const maleNames = [
-    "aman", "rishi", "prabhat", "aarav", "rohan", "vikram", "kabir", "aditya",
+    "aman", "rishi", "prabhat", "arun", "ramesh", "rohan", "vikram", "kabir", "aditya",
     "dev", "neer", "siddharth", "varun", "alex", "fred", "daniel", "david",
     "george", "male", "albert", "ralph", "tom", "oliver", "bruce", "junior",
     "eddy", "reed", "rocko", "grandpa", "bad news", "bahh", "bells", "boing",
@@ -388,9 +371,20 @@ export function getBestFemaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynth
     return maleNames.some((m) => lower.includes(m));
   };
 
-  // 1. High priority: Verified Indian English female voices (fits Senior Interviewer Ananya)
+  // 0. High priority: Regional language female voice matching preferredLang (e.g. Hindi, Kannada, Tamil, etc.)
+  if (preferredLang && (!preferredLang.startsWith("en") || preferredLang.startsWith("hi"))) {
+    const langPrefix = preferredLang.split("-")[0].toLowerCase();
+    const regionalVoice = list.find((v) => {
+      const l = v.lang.toLowerCase();
+      const n = v.name.toLowerCase();
+      return (l.startsWith(langPrefix) || l.includes(langPrefix) || n.includes("hindi") || n.includes("lekha")) && !isMaleVoice(n);
+    });
+    if (regionalVoice) return regionalVoice;
+  }
+
+  // 1. High priority: Verified Indian English female voices (fits Senior Interviewer Nalini/Pooja)
   // macOS includes "Tara" (en_IN), Windows/Chrome often includes "Veena", "Sangeeta", "Aditi", "Lekha"
-  const indianFemaleNames = ["tara", "veena", "sangeeta", "ananya", "aditi", "lekha", "kavya", "diya", "priya", "pooja", "female"];
+  const indianFemaleNames = ["tara", "veena", "sangeeta", "nalini", "aditi", "lekha", "kavya", "diya", "priya", "pooja", "female"];
   const indianFemale = list.find((v) => {
     const n = v.name.toLowerCase();
     const l = v.lang.toLowerCase();
@@ -426,7 +420,11 @@ export function getBestFemaleVoice(voices?: SpeechSynthesisVoice[]): SpeechSynth
   });
   if (nonMaleEnglish) return nonMaleEnglish;
 
-  return list[0] || null;
+  // 5. Strict Fallback: ANY voice in the list that is not a known male voice
+  const anyNonMale = list.find((v) => !isMaleVoice(v.name));
+  if (anyNonMale) return anyNonMale;
+
+  return null; // NEVER return a male voice like Alex for a female persona
 }
 
 /**
@@ -470,7 +468,17 @@ export function speak(
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = options?.rate ?? 1.0;
     utterance.pitch = options?.pitch ?? (isMale ? 0.92 : 1.05);
-    utterance.lang = options?.lang ?? "en-US";
+    // Auto-detect language from script if text is in Hindi/Devanagari or regional Indic script
+    let effectiveLang = options?.lang || "en-IN";
+    if (/[\u0900-\u097F]/.test(text)) effectiveLang = "hi-IN";
+    else if (/[\u0C80-\u0CFF]/.test(text)) effectiveLang = "kn-IN";
+    else if (/[\u0B80-\u0BFF]/.test(text)) effectiveLang = "ta-IN";
+    else if (/[\u0C00-\u0C7F]/.test(text)) effectiveLang = "te-IN";
+    else if (/[\u0980-\u09FF]/.test(text)) effectiveLang = "bn-IN";
+    else if (/[\u0A80-\u0AFF]/.test(text)) effectiveLang = "gu-IN";
+    else if (/[\u0D00-\u0D7F]/.test(text)) effectiveLang = "ml-IN";
+
+    utterance.lang = effectiveLang;
 
     const voices = window.speechSynthesis.getVoices();
 
@@ -480,7 +488,9 @@ export function speak(
       selectedVoice = voices.find((v) => v.name === options.voiceName) || null;
     }
     if (!selectedVoice) {
-      selectedVoice = isMale ? getBestMaleVoice(voices) : getBestFemaleVoice(voices);
+      selectedVoice = isMale
+        ? getBestMaleVoice(voices, effectiveLang)
+        : getBestFemaleVoice(voices, effectiveLang);
     }
     if (selectedVoice) {
       utterance.voice = selectedVoice;
@@ -546,11 +556,19 @@ export function stopSpeaking(): void {
 }
 
 /**
- * Available STT languages for the speech recognition dropdown.
+ * Available STT languages for the speech recognition dropdown,
+ * natively supporting Gnani.ai Prisma ASR & Indic regional speech.
  */
 export const STT_LANGUAGES = [
+  { code: "en-IN", label: "English (India)" },
+  { code: "hi-IN", label: "Hindi (हिंदी)" },
+  { code: "kn-IN", label: "Kannada (ಕನ್ನಡ)" },
+  { code: "ta-IN", label: "Tamil (தமிழ்)" },
+  { code: "te-IN", label: "Telugu (తెలుగు)" },
+  { code: "mr-IN", label: "Marathi (मराठी)" },
+  { code: "bn-IN", label: "Bengali (বাংলা)" },
+  { code: "ml-IN", label: "Malayalam (മലയാളം)" },
+  { code: "gu-IN", label: "Gujarati (ગુજરાતી)" },
   { code: "en-US", label: "English (US)" },
   { code: "en-GB", label: "English (UK)" },
-  { code: "en-IN", label: "English (India)" },
-  { code: "hi-IN", label: "Hindi" },
 ] as const;

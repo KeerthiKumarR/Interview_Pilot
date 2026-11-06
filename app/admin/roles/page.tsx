@@ -507,10 +507,10 @@ export default function InterviewRolesPage() {
                 />
               </div>
 
-              {/* Pipeline Mode */}
+              {/* Evaluation Mode */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="font-semibold text-foreground">Interview Pipeline Mode</label>
+                  <label className="font-semibold text-foreground">Interview Evaluation Mode</label>
                   <span className="text-[10px] text-muted-foreground">Decided per job card</span>
                 </div>
                 <p className="text-xs text-muted-foreground">

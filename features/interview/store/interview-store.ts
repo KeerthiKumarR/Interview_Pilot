@@ -17,7 +17,7 @@ export interface TranscriptMessage {
 
 // ─── Layout Persistence ──────────────────────
 
-const LAYOUT_STORAGE_KEY = "mirai_layout_prefs";
+const LAYOUT_STORAGE_KEY = "interview_pilot_layout_prefs";
 
 interface LayoutPrefs {
   layoutMode: LayoutMode;
@@ -95,6 +95,7 @@ interface InterviewState {
   // Voice
   isMicMuted: boolean;
   isSpeakerMuted: boolean;
+  isCameraOff: boolean;
   selectedVoiceId: string | null;
   sttLanguage: string;
   voiceInputMode: "auto" | "manual";
@@ -163,6 +164,8 @@ interface InterviewState {
   setTimerActive: (active: boolean) => void;
   toggleMic: () => void;
   toggleSpeaker: () => void;
+  toggleCamera: () => void;
+  setIsCameraOff: (isCameraOff: boolean) => void;
   setSelectedVoiceId: (id: string | null) => void;
   setSttLanguage: (lang: string) => void;
   setVoiceInputMode: (mode: "auto" | "manual") => void;
@@ -198,8 +201,9 @@ const initialState = {
   messages: [] as TranscriptMessage[],
   isMicMuted: false,
   isSpeakerMuted: false,
-  selectedVoiceId: "local_female" as string | null,
-  sttLanguage: "en-IN",
+  isCameraOff: false,
+  selectedVoiceId: "gnani_nalini" as string | null,
+  sttLanguage: (typeof window !== "undefined" && localStorage.getItem("interview_pilot_stt_lang")) || "en-IN",
   voiceInputMode: "manual" as const,
   isStreaming: false,
   layoutMode: layoutPrefs.layoutMode,
@@ -207,7 +211,7 @@ const initialState = {
   showAIPanel: layoutPrefs.showAIPanel,
   editorSplitPercent: layoutPrefs.editorSplitPercent,
   problemSplitPercent: layoutPrefs.problemSplitPercent,
-  showAiThinking: true,
+  showAiThinking: false,
   hintsUsed: 0,
   saveStatus: "idle" as const,
   interviewMode: "hybrid" as const,
@@ -241,7 +245,7 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
       code: data.code,
       timeRemainingSeconds: data.timeRemainingSeconds ?? data.duration * 60,
       timerActive: data.status === "in_progress",
-      showAiThinking: data.showAiThinking ?? true,
+      showAiThinking: data.showAiThinking ?? false,
       interviewMode: data.interviewMode || "hybrid",
       activeCategory: data.activeCategory || "code_editor",
       categoryTimeRemainingSeconds: 300,
@@ -311,9 +315,18 @@ export const useInterviewStore = create<InterviewState>((set, get) => ({
   toggleSpeaker: () =>
     set((state) => ({ isSpeakerMuted: !state.isSpeakerMuted })),
 
+  toggleCamera: () => set((state) => ({ isCameraOff: !state.isCameraOff })),
+
+  setIsCameraOff: (isCameraOff) => set({ isCameraOff }),
+
   setSelectedVoiceId: (selectedVoiceId) => set({ selectedVoiceId }),
 
-  setSttLanguage: (sttLanguage) => set({ sttLanguage }),
+  setSttLanguage: (sttLanguage) => {
+    try {
+      localStorage.setItem("interview_pilot_stt_lang", sttLanguage);
+    } catch {}
+    set({ sttLanguage });
+  },
 
   setVoiceInputMode: (voiceInputMode) => set({ voiceInputMode }),
 

@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// Mirai Copilot — DeepSeek AI Service
+// Mirai Copilot — AI Service
 // ──────────────────────────────────────────────
 // Handles all communication with DeepSeek V4 Flash API.
 // Provides interviewer persona, problem presentation,
@@ -27,14 +27,14 @@ export function invalidateProviderConfigCache() {
 
 async function fetchProviderConfigFromDb() {
   // Default fallbacks from environment
-  let activeProvider = process.env.DEFAULT_AI_PROVIDER || (process.env.GROQ_API_KEY ? "groq" : process.env.NVIDIA_API_KEY ? "nvidia" : process.env.OPENROUTER_API_KEY ? "openrouter" : "gemini");
-  let activeModel = process.env.DEFAULT_AI_MODEL || (activeProvider === "groq" ? "qwen/qwen3.8-27b" : activeProvider === "nvidia" ? "meta/llama-3.1-8b-instruct" : process.env.OPENROUTER_MODEL || (activeProvider === "openrouter" ? "inclusionai/ling-3.0-flash-sante:free" : "gemini-2.5-flash"));
+  let activeProvider = process.env.DEFAULT_AI_PROVIDER || (process.env.AI_API_KEY ? "ai" : process.env.GROQ_API_KEY ? "groq" : process.env.NVIDIA_API_KEY ? "nvidia" : process.env.OPENROUTER_API_KEY ? "openrouter" : "gemini");
+  let activeModel = process.env.DEFAULT_AI_MODEL || process.env.AI_MODEL || (activeProvider === "groq" || activeProvider === "ai" ? "qwen/qwen3.8-27b" : activeProvider === "nvidia" ? "meta/llama-3.1-8b-instruct" : process.env.OPENROUTER_MODEL || (activeProvider === "openrouter" ? "inclusionai/ling-3.0-flash-sante:free" : "gemini-2.5-flash"));
   let reportProvider = process.env.REPORT_AI_PROVIDER || activeProvider;
   let reportModel = process.env.REPORT_AI_MODEL || (reportProvider === "groq" ? "openai/gpt-oss-120b" : activeModel);
   let groqKey = process.env.GROQ_API_KEY || "";
   let nvidiaKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
   let geminiKey = process.env.GEMINI_API_KEY || "";
-  let zaiKey = process.env.ZAI_API_KEY || "511ba8c060534cd2b50e8e78170d4ed2.6hEKr2c10VeIHk3c";
+  let zaiKey = process.env.ZAI_API_KEY || "";
   let openrouterKey = process.env.OPENROUTER_API_KEY || "";
   let deepseekKey = process.env.DEEPSEEK_API_KEY || "";
 
@@ -100,6 +100,11 @@ async function fetchProviderConfigFromDb() {
     activeModel,
     reportProvider,
     reportModel,
+    ai: {
+      key: process.env.AI_API_KEY || groqKey || openrouterKey || nvidiaKey,
+      url: process.env.AI_API_URL || process.env.GROQ_API_URL || "https://api.groq.com/openai/v1",
+      model: process.env.AI_MODEL || process.env.GROQ_MODEL || "qwen/qwen3.8-27b",
+    },
     groq: {
       key: groqKey,
       url: process.env.GROQ_API_URL || "https://api.groq.com/openai/v1",
@@ -214,7 +219,10 @@ export async function deepseekChat(
   const model = options?.useReportModel ? config.reportModel : config.activeModel;
   let isOpenRouter = false;
 
-  if (activeProviderToUse === "groq") {
+  if (activeProviderToUse === "ai") {
+    url = config.ai.url;
+    key = config.ai.key;
+  } else if (activeProviderToUse === "groq") {
     url = config.groq.url;
     key = config.groq.key;
   } else if (activeProviderToUse === "nvidia") {
@@ -483,7 +491,7 @@ export async function deepseekChatStream(
     if (content || reasoning) {
       accumulatedContent = content;
       accumulatedReasoning = reasoning;
-      accumulated = reasoning ? `\n*Thinking...*\n${reasoning}\n\n---\n\n${content}` : content;
+      accumulated = content;
     } else if (data.error) {
       throw new Error(`OpenRouter returned JSON error: ${data.error.message || JSON.stringify(data.error)}`);
     }
@@ -607,20 +615,12 @@ export async function deepseekChatStream(
               if (reasoning) {
                 if (!isReasoning) {
                   isReasoning = true;
-                  const startTag = "\n*Thinking...*\n";
-                  accumulated += startTag;
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: startTag, isReasoning: true })}\n\n`));
                 }
-                accumulated += reasoning;
                 accumulatedReasoning += reasoning;
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: reasoning, isReasoning: true })}\n\n`));
               } else if (delta) {
                 if (isReasoning) {
                   isReasoning = false;
-                  const endTag = "\n\n---\n\n";
-                  accumulated += endTag;
-                  // End tag is still technically part of reasoning formatting
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: endTag, isReasoning: true })}\n\n`));
                 }
                 accumulated += delta;
                 accumulatedContent += delta;
@@ -690,6 +690,7 @@ export function buildInterviewerSystemPrompt(config: {
   currentQuestionTitle?: string | null;
   currentQuestionPrompt?: string | null;
   currentCategory?: string | null;
+  spokenLanguage?: string;
 }): string {
   // Build active stage context to keep the AI anchored on what part the candidate is on
   let stageContext = "";
@@ -756,32 +757,48 @@ Candidate's current logged malpractice and assistance metrics:
 INSTRUCTION: You must keep these malpractice counts in mind for candidate evaluation and final scorecard generation. Do NOT output red warning cards, proctoring alert banners, or reprimands in your chat responses. Focus your conversation purely on technical problem-solving, code evaluation, and Socratic interview questions.`;
 
 const INDIAN_VOICE_NAME_MAP: Record<string, string> = {
-  am_adam: "Aarav",
+  gnani_nalini: "Nalini",
+  gnani_pooja: "Pooja",
+  gnani_arun: "Arun",
+  nalini: "Nalini",
+  pooja: "Pooja",
+  arun: "Arun",
+  local_female: "Nalini",
+  local_male: "Arun",
+  am_adam: "Arun",
   am_michael: "Rohan",
   am_fenrir: "Vikram",
   am_puck: "Kabir",
   am_echo: "Aditya",
-  af_heart: "Ananya",
+  af_heart: "Nalini",
   af_bella: "Diya",
   af_sarah: "Isha",
   af_nicole: "Kavya",
   af_sky: "Meera",
   if_sara: "Priya",
-  minimax_male_presenter: "Dev",
-  minimax_female_shaonv: "Riya",
-  minimax_female_yujie: "Sanya",
-  gemini_alloy: "Neer",
-  gemini_echo: "Siddharth",
-  gemini_onyx: "Varun",
-  gemini_nova: "Tara",
-  gemini_shimmer: "Neha",
-  local_male: "Aarav",
-  local_female: "Ananya",
+  minimax_male_presenter: "Arun",
+  minimax_female_shaonv: "Pooja",
+  minimax_female_yujie: "Nalini",
+  gemini_alloy: "Arun",
+  gemini_echo: "Arun",
+  gemini_onyx: "Arun",
+  gemini_nova: "Pooja",
+  gemini_shimmer: "Nalini",
 };
 
-  const isFemale = config.voiceId && (config.voiceId.startsWith("af_") || config.voiceId.startsWith("if_") || config.voiceId.startsWith("bf_") || config.voiceId.includes("female") || config.voiceId === "gemini_nova" || config.voiceId === "gemini_shimmer");
+  const isFemale = config.voiceId
+    ? config.voiceId.includes("nalini") ||
+      config.voiceId.includes("pooja") ||
+      config.voiceId.startsWith("af_") ||
+      config.voiceId.startsWith("if_") ||
+      config.voiceId.startsWith("bf_") ||
+      config.voiceId.includes("female") ||
+      config.voiceId === "gemini_nova" ||
+      config.voiceId === "gemini_shimmer" ||
+      config.voiceId === "local_female"
+    : true;
   const mappedName = config.voiceId ? INDIAN_VOICE_NAME_MAP[config.voiceId] : undefined;
-  const interviewerName = mappedName || (isFemale ? "Ananya" : "Aarav");
+  const interviewerName = mappedName || (isFemale ? "Nalini" : "Arun");
 
   const isPlacementViva =
     config.isViva ||
@@ -790,12 +807,141 @@ const INDIAN_VOICE_NAME_MAP: Record<string, string> = {
     config.problemTitle?.toLowerCase().includes("project") ||
     config.style === "viva";
 
+  let difficultyInstructions = "";
+  const diff = (config.difficulty || "medium").toLowerCase();
+
+  if (diff === "easy") {
+    difficultyInstructions = `
+DIFFICULTY RIGOR: EASY (Foundational / Fresher Level):
+- Questioning Style: Welcoming, foundational, and guiding.
+- Technical Scope: Focus on fundamental concepts: basic component state, straightforward RESTful CRUD operations, basic SQL/NoSQL schema concepts, and standard data structures (Arrays, HashMaps).
+- Handling Imperfections: If the candidate misses an edge case, offer gentle hints and guide them to reason through it. Do NOT interrogate on distributed microservices, cache stampedes, or sharding.
+- Code Expectations: Emphasize readable, clean code that compiles and solves the primary user flow.`;
+  } else if (diff === "hard") {
+    difficultyInstructions = `
+DIFFICULTY RIGOR: HARD (Top-Tier / FAANG Bar):
+- Questioning Style: Demanding, rigorous, and intellectually probing. Like a Staff Engineer / Principal Architect interview at Google, Meta, or Amazon.
+- Technical Scope: High-throughput distributed systems, strict memory constraints, sub-millisecond p99 latency, race conditions, thread safety, and complex system trade-offs.
+  * In Project Architecture: Demand justification for distributed transactions, cache stampede / thundering herd mitigation, write-heavy sharding strategies, database connection pool exhaustion, and event streaming (Kafka/RabbitMQ vs WebSockets).
+  * In Coding / Scratchpad: Reject brute-force O(N^2) solutions immediately. Demand optimal Big-O time and space complexity (O(N) or O(log N) with O(1) auxiliary space) and robust handling of high-concurrency edge cases.
+- Handling Imperfections: Push the candidate to find their own edge cases and failure modes. Ask "How does this break at 100,000 requests per second?" and "What is the mathematical invariant of your loop?".`;
+  } else {
+    difficultyInstructions = `
+DIFFICULTY RIGOR: MEDIUM (Campus Placement Benchmark):
+- Questioning Style: Professional, thorough, and realistic engineering lead.
+- Technical Scope: Production-grade application architecture, relational/document database design, indexing strategies, authentication & authorization, and standard algorithmic problem solving.
+- Expectations: Require clean Big-O analysis, testing of typical boundary edge cases (empty inputs, nulls, duplicates), and clear explanations of trade-offs (e.g., SQL vs NoSQL, Client vs Server rendering).
+- Code Expectations: Clean, modular, production-ready code with appropriate error boundaries and O(N log N) or O(N) efficiency.`;
+  }
+
+  const langCode = (config.spokenLanguage || "en-IN").toLowerCase();
+  let spokenLangInstruction = "";
+  if (langCode.startsWith("hi")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: HINDI (हिंदी)
+- The candidate has explicitly chosen Hindi (हिंदी) as their spoken interview language.
+- You MUST conduct this entire interview and formulate ALL spoken conversational dialogue in Hindi using standard Devanagari script (e.g. "नमस्ते! मैं ${interviewerName} हूँ...", "कृपया मुझे अपने प्रोजेक्ट के डेटा फ्लो के बारे में बताएं...").
+- Keep technical keywords and identifiers (e.g., React, Next.js, Redis, Docker, Kubernetes, PostgreSQL, API, Database, Schema, Cache, Index, Queue, Concurrency, Latency, Big-O) in standard English/Hinglish terminology as Indian software engineers naturally converse.
+- Do NOT output full English paragraphs. The Indic Text-To-Speech engine uses your Devanagari script to speak with native, human Hindi intonation!`;
+  } else if (langCode.startsWith("kn")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: KANNADA (ಕನ್ನಡ)
+- The candidate has explicitly chosen Kannada (ಕನ್ನಡ) as their spoken interview language.
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in Kannada script (e.g. "ನಮಸ್ಕಾರ! ನಾನು ${interviewerName}...", "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪ್ರಾಜೆಕ್ಟ್ ಆರ್ಕಿಟೆಕ್ಚರ್ ಬಗ್ಗೆ ತಿಳಿಸಿ...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, etc.) in English as standard practice.
+- Do NOT output full English paragraphs. Speak directly to the candidate in warm, professional Kannada.`;
+  } else if (langCode.startsWith("ta")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: TAMIL (தமிழ்)
+- The candidate has explicitly chosen Tamil (தமிழ்) as their spoken interview language.
+- You MUST conduct this entire interview and formulate spoken dialogue in Tamil script.
+- Keep standard technical terms (React, Redis, Docker, API, etc.) in English.`;
+  } else if (langCode.startsWith("te")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: TELUGU (తెలుగు)
+- The candidate has explicitly chosen Telugu (తెలుగు) as their spoken interview language.
+- You MUST conduct this interview and formulate spoken dialogue in Telugu script.
+- Keep standard technical terms (React, Redis, Docker, API, etc.) in English.`;
+  } else if (langCode.startsWith("mr")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: MARATHI (मराठी)
+- The candidate has explicitly chosen Marathi (मराठी) as their spoken interview language.
+- You MUST conduct this interview and formulate spoken dialogue in Marathi (Devanagari script).
+- Keep standard technical terms in English.`;
+  } else if (langCode.startsWith("bn")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: BENGALI (বাংলা)
+- The candidate has explicitly chosen Bengali (বাংলা) as their spoken interview language.
+- You MUST conduct this interview and formulate spoken dialogue in Bengali script.
+- Keep standard technical terms in English.`;
+  } else if (langCode.startsWith("gu")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: GUJARATI (ગુજરાતી)
+- The candidate has explicitly chosen Gujarati (ગુજરાતી) as their spoken interview language.
+- You MUST conduct this interview and formulate spoken dialogue in Gujarati script.
+- Keep standard technical terms in English.`;
+  } else if (langCode.startsWith("ml")) {
+    spokenLangInstruction = `
+CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: MALAYALAM (മലയാളം)
+- The candidate has explicitly chosen Malayalam (മലയാളം) as their spoken interview language.
+- You MUST conduct this interview and formulate spoken dialogue in Malayalam script.
+- Keep standard technical terms in English.`;
+  }
+
+  const isBehavioral =
+    config.style === "service" ||
+    config.style === "behavioral" ||
+    config.problemTitle?.toLowerCase().includes("hr") ||
+    config.problemTitle?.toLowerCase().includes("behavioral") ||
+    config.problemTitle?.toLowerCase().includes("situational");
+
+  if (isBehavioral) {
+    return `You are ${interviewerName}, a Senior Engineering Hiring Manager and Talent Leader conducting a live HR & Behavioral Competency Interview.
+
+MISSION & IDENTITY:
+- You are evaluating the candidate's situational judgment, communication maturity, leadership, ownership, and cultural alignment using the STAR method (Situation, Task, Action, Result).
+- You are NOT asking LeetCode DSA questions or low-level coding trivia. You are probing how the candidate works in teams, resolves interpersonal and technical conflicts, responds to constructive feedback, and delivers under pressure.
+- This is a natural, live spoken conversation (Voice-to-Voice). Speak with warmth, professional curiosity, and empathy.
+
+INTERVIEW CONTEXT:
+- Session: HR & Behavioral Competency Assessment
+- Difficulty Level: ${config.difficulty}
+- Target Duration: ${config.duration} minutes
+${difficultyInstructions}
+${timeContext}
+${stageContext}
+${spokenLangInstruction}
+
+STRUCTURED 4-STAGE BEHAVIORAL VIVA OBJECTIVES:
+1. Stage 1 (Introduction, Career Motivation & Culture Fit):
+   - Welcome the candidate warmly. Ask about their motivations, career aspirations, and what drives their passion for software engineering.
+2. Stage 2 (Teamwork & Conflict Resolution):
+   - Ask for a concrete example where they disagreed with a teammate or lead on a technical approach or deadline.
+   - Probe: "How did you handle that disagreement, and how did you reach alignment without compromising the project timeline?"
+3. Stage 3 (Ownership, Handling Pressure & Failure):
+   - Ask about a time a project ran behind schedule, a critical bug occurred, or an initiative failed.
+   - Probe: "What was your direct responsibility in that situation, what action did you take to mitigate the fallout, and what lasting lesson did you learn?"
+4. Stage 4 (Reflection, Value Fit & Wrap-up):
+   - Evaluate their self-awareness, receptivity to critical feedback, and professional ethics.
+   - Conclude gracefully with encouraging leadership insights.
+
+CRITICAL VOICE & CONVERSATION RULES:
+1. SPOKEN BREVITY: Every response MUST be strictly 2 to 3 sentences (maximum 50-70 words). The candidate is listening via audio.
+2. ONE CLEAR QUESTION: Ask exactly ONE targeted situational question at a time. Let the candidate respond before following up.
+3. PROBE FOR THE STAR METHOD: When the candidate shares an experience, gently probe for their specific personal action and quantifiable outcome ("What exact role did you take in that, and what was the final result?").
+4. NO CODING REQUIRED: This is a purely spoken HR & Behavioral session. Do NOT direct them to write algorithms or code in the editor.
+5. PURE PROFESSIONAL SPOKEN DIALOGUE ONLY: Never output meta-commentary, thinking logs, credit chatter, or token phrases. Speak directly to the candidate with 100% executive professionalism.
+
+TONE: Warm, empathetic, perceptive, and professionally encouraging.`;
+  }
+
   if (isPlacementViva) {
     return `You are ${interviewerName}, a Senior Technical Interviewer & Staff Systems Architect conducting a live, verbal Placement Viva and Project Defense.
 
 MISSION & IDENTITY:
 - You are conducting a high-stakes, verbal Placement Viva and Project Architecture Defense.
 - You are NOT testing a LeetCode algorithmic puzzle. You are evaluating the candidate's actual engineering depth, system design decisions, and hands-on competence based on their resume, verified tech stack, and portfolio projects.
+- TARGET JOB ALIGNMENT: If this session is for a specific job opening (specified under "TARGET JOB REQUIREMENTS & EVALUATION RUBRIC"), you represent that hiring bar! Inquire deeply on the required tech stack, engineering challenges, and architectural patterns needed for this specific role and company.
 - This is a natural, live spoken conversation (Voice-to-Voice). Speak warmly, articulately, and directly as a senior engineering lead on a video call.
 
 VIVA INTERVIEW CONTEXT:
@@ -803,9 +949,12 @@ VIVA INTERVIEW CONTEXT:
 - Difficulty Level: ${config.difficulty}
 - Core Tech Ecosystem: ${config.language}
 - Target Duration: ${config.duration} minutes
+${config.problemDescription ? `\nTARGET JOB REQUIREMENTS & EVALUATION RUBRIC:\n${config.problemDescription}\n` : ""}
+${difficultyInstructions}
 ${timeContext}
 ${proctoringContext}
 ${stageContext}
+${spokenLangInstruction}
 
 STRUCTURED 4-STAGE VIVA OBJECTIVES:
 You are actively guiding the candidate across these 4 evaluation stages:
@@ -854,6 +1003,8 @@ CRITICAL VOICE & CONVERSATION RULES:
 5. ACKNOWLEDGE CODE & RUNS: When the candidate writes or executes code in the scratchpad, reference their actual code lines and terminal output directly in the conversation.
 6. NO MARKDOWN OR CODE BLOCKS IN SPEECH: Speak in clear, natural human sentences. Use natural punctuation (commas, ellipses) so that text-to-speech speaks with natural pauses.
 7. RIGOROUS YET ENCOURAGING: Validate solid points ("Good, that makes sense with Redis TTLs..."), but push them on trade-offs ("Now, what happens if your cache expires during a write storm?").
+8. PURE PROFESSIONAL SPOKEN DIALOGUE ONLY: NEVER output internal thoughts, token counts, cost phrases, credit remarks, or reasoning chatter (e.g. "Thinking...", "I am thinking", "<think>", "Tokens used", "Credits remaining", "Let me evaluate"). Output ONLY your direct spoken words to the candidate.
+9. ABSOLUTELY NO SYSTEM CHATTER OR CREDITS MENTIONS: Never mention AI limits, credits, quotas, tokens, model identity, or background processing. Conduct the session with 100% executive hiring professionalism.
 
 ANSWER EVALUATION & CLASSIFICATION POLICY (4 DETERMINISTIC EXAMINER ACTIONS):
 - STRONG ANSWER: If the candidate gives an accurate, well-reasoned answer, acknowledge it warmly and PROBE DEEPER into nuanced trade-offs, edge cases, failure recovery, or production bottlenecks.
@@ -901,10 +1052,12 @@ INTERVIEW CONTEXT:
 - Difficulty: ${config.difficulty}
 - Language: ${config.language}
 - Duration: ${config.duration} minutes
+${difficultyInstructions}
 ${styleInstructions}
 ${timeContext}
 ${proctoringContext}
 ${stageContext}
+${spokenLangInstruction}
 
 PROBLEM DETAILS:
 ${config.problemDescription}
@@ -932,6 +1085,8 @@ BEHAVIOR RULES:
 10. Address the candidate directly ("you", "your code", etc.).
 11. You can see the candidate's code in the editor with line numbers. Reference specific line numbers (e.g. "On line 12...") when giving code feedback.
 12. DIFFICULTY ADAPTATION: Monitor the candidate's performance. Follow the PROGRESSIVE DIFFICULTY ESCALATION PATHS above to guide their interview progression.
+13. STRICT PROFESSIONAL SPOKEN DIALOGUE ONLY: NEVER output internal thoughts, token counts, credit chatter, cost phrases, or reasoning remarks (e.g. "Thinking...", "I am thinking", "<think>", "Tokens used", "Remaining credits"). Output ONLY your direct spoken words to the candidate.
+14. ABSOLUTELY NO SYSTEM CHATTER OR CREDITS MENTIONS: Never mention AI limits, credits, quotas, tokens, model identity, or background processing. Conduct the session with 100% executive hiring professionalism.
 
 TONE: Professional, calm, encouraging. Like a real interviewer at a top tech company.`;
 }

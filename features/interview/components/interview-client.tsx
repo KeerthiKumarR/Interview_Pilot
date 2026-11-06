@@ -22,12 +22,13 @@ import { InterviewStageShell } from "./interview-stage-shell";
 import { CodingWorkspaceView } from "./coding-workspace-view";
 import { ResizableSplitter } from "@/components/resizable-splitter";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { useTTS } from "@/hooks/use-tts";
+import { useTTS, speakBackend, stopAllTTSAudio, prefetchTTSAudio } from "@/hooks/use-tts";
+import { stopSpeaking } from "@/hooks/use-web-speech";
 import { useTabSwitchDetection } from "@/hooks/use-tab-switch-detection";
 import { useFaceDetection } from "@/hooks/use-face-detection";
 
 import { useRouter } from "next/navigation";
-import { speakBackend } from "@/hooks/use-tts";
+import { Loader2 } from "lucide-react";
 import { getVivaStarterCode } from "@/lib/interview/starter-code";
 
 interface InterviewClientProps {
@@ -48,6 +49,8 @@ interface InterviewClientProps {
     questions?: any[];
   };
   existingMessages: TranscriptMessage[];
+  initialSpokenLanguage?: string;
+  initialVoiceId?: string;
 }
 
 export const VIVA_STAGES = [
@@ -62,7 +65,7 @@ export const VIVA_STAGES = [
   },
   {
     order: 2,
-    title: "2. Project Defense",
+    title: "2. Project Deep Dive",
     stage: "project_defense",
     category: "code_editor" as const,
     durationMinutes: 6,
@@ -80,11 +83,11 @@ export const VIVA_STAGES = [
   },
   {
     order: 4,
-    title: "4. Wrap-up & Scoring",
+    title: "4. Summary & Feedback",
     stage: "wrap_up",
     category: "code_editor" as const,
     durationMinutes: 3,
-    promptText: "To wrap up our placement viva, let's touch upon engineering collaboration and any questions you have for me.",
+    promptText: "To wrap up our interview, let's touch upon engineering collaboration and any questions you have for me.",
     expectedRubric: ["Behavioral ownership", "Curiosity & culture fit", "Readiness evaluation"],
   },
 ];
@@ -101,6 +104,8 @@ export const VIVA_STAGES = [
 export function InterviewClient({
   interview,
   existingMessages,
+  initialSpokenLanguage,
+  initialVoiceId,
 }: InterviewClientProps) {
   const router = useRouter();
   const initInterview = useInterviewStore((s) => s.initInterview);
@@ -121,6 +126,7 @@ export function InterviewClient({
 
   // ─── Proctoring: Tab Switch Detection ─────
   const isInterviewActive = status === "in_progress" && lobbyCompleted;
+  const isCameraOff = useInterviewStore((s) => s.isCameraOff);
   const {
     tabSwitchCount,
     showWarning: showTabWarning,
@@ -139,7 +145,7 @@ export function InterviewClient({
     stream: cameraStream,
     dismissWarning: dismissFaceWarning,
   } = useFaceDetection({
-    enabled: isInterviewActive,
+    enabled: isInterviewActive && !isCameraOff,
     interviewId: interview.id,
     initialCount: interview.outOfFrameCount ?? 0,
     intervalMs: 500,
@@ -222,24 +228,76 @@ export function InterviewClient({
     return () => window.removeEventListener("ai-tool-call", handleToolCall);
   }, []);
 
+  // Pre-load report bundle in background for zero-delay instant transition on interview conclusion
+  useEffect(() => {
+    if (interview?.id) {
+      router.prefetch(`/report/${interview.id}`);
+    }
+  }, [interview?.id, router]);
+
+  // Pre-warm audio cache for initial greeting while candidate is in the lobby
+  useEffect(() => {
+    const initialAssistant = existingMessages.find((m) => m.role === "assistant");
+    if (initialAssistant?.content && interview?.id) {
+      prefetchTTSAudio(initialAssistant.content, interview.id);
+    }
+  }, [existingMessages, interview?.id]);
+
   // Centralized TTS Hook
   const { bufferToken, flushAndFinish, resetTTS, stopAll: stopTTS } = useTTS();
+  const stopGenerationRef = useRef<() => void>(() => {});
 
   const handleEndInterview = useCallback(async () => {
-    stopTTS();
-    if (interview.id) {
-      await fetch(`/api/interviews/${interview.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "submit" }),
-      }).catch(() => {});
-      try {
-        localStorage.removeItem(`interview_time_${interview.id}`);
-      } catch {}
+    // 1. FIRST: STOP THE AGENT COMPLETELY
+    try {
+      stopGenerationRef.current();
+    } catch {}
+
+    // Immediately silence all speech synthesis & background audio
+    try {
+      resetTTS();
+      stopTTS();
+      stopSpeaking();
+      stopAllTTSAudio();
+    } catch {}
+
+    // Reset store states so AI visual indicators (VoiceOrb, wave, thinking) stop immediately
+    const store = useInterviewStore.getState();
+    store.setAIState("idle");
+    store.setIsStreaming(false);
+    store.setTimerActive(false);
+
+    // Stop candidate camera stream to release webcam hardware immediately
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
     }
-    useInterviewStore.getState().setStatus("completed");
-    router.push(`/report/${interview.id}`);
-  }, [interview.id, router, stopTTS]);
+
+    // 2. FINALIZE & SUBMIT SESSION DATA
+    try {
+      if (interview.id) {
+        // Fire PATCH asynchronously so user doesn't wait for network round-trip
+        fetch(`/api/interviews/${interview.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: store.code,
+            action: "submit",
+          }),
+        }).catch(() => {});
+
+        try {
+          localStorage.removeItem(`interview_time_${interview.id}`);
+        } catch {}
+      }
+    } finally {
+      store.setStatus("completed");
+      router.replace(`/report/${interview.id}`);
+    }
+  }, [interview.id, router, stopTTS, resetTTS, cameraStream]);
 
   // Advance to next stage / question (triggered by timer, AI, or button)
   const handleAdvanceToNextStage = useCallback(
@@ -252,10 +310,10 @@ export function InterviewClient({
           const nextIdx = curIdx + 1;
           s.setCurrentQuestionIndex(nextIdx);
           const stageNames = [
-            "Intro & Role Fit",
-            "Project Defense",
+            "Introduction & Background",
+            "Project Deep Dive",
             "Architecture & Code",
-            "Wrap-up & Scoring",
+            "Summary & Feedback",
           ];
           const nextStageTitle = stageNames[nextIdx] || `Stage ${nextIdx + 1}`;
           const announcement = `Moving to Stage ${nextIdx + 1}: ${nextStageTitle}.`;
@@ -266,7 +324,7 @@ export function InterviewClient({
         } else {
           s.addMessage(
             "assistant",
-            "You have completed all stages of the placement viva. Feel free to review your code and conclude the interview."
+            "You have completed all stages of the interview. Feel free to review your code and conclude when you're ready."
           );
         }
         return;
@@ -498,6 +556,10 @@ export function InterviewClient({
 
   const { sendMessage, stopGeneration, isReconnecting } = useChatStream(streamCallbacks);
 
+  useEffect(() => {
+    stopGenerationRef.current = stopGeneration;
+  }, [stopGeneration]);
+
   // Stable sendMessage for child components supporting both Hybrid and Dynamic modes
   const handleSendMessage = useCallback(
     async (text: string) => {
@@ -650,6 +712,7 @@ export function InterviewClient({
   const handleStopGeneration = useCallback(() => {
     stopGeneration();
     resetTTS();
+    stopAllTTSAudio();
   }, [stopGeneration, resetTTS]);
 
   // Global ESC keyboard shortcut to stop AI speaking or text generation
@@ -730,6 +793,13 @@ export function InterviewClient({
       useInterviewStore.setState({ messages: existingMessages });
     }
 
+    if (initialSpokenLanguage) {
+      useInterviewStore.getState().setSttLanguage(initialSpokenLanguage);
+    }
+    if (initialVoiceId) {
+      useInterviewStore.getState().setSelectedVoiceId(initialVoiceId);
+    }
+
     return () => {
       stopTTS();
       useInterviewStore.getState().reset();
@@ -753,12 +823,12 @@ export function InterviewClient({
       }
     }
 
-    if (existingMessages.length === 0) {
+    const hasCandidateSpoken = existingMessages.some((m) => m.role === "user");
+
+    if (!hasCandidateSpoken) {
       async function startInterview() {
         const currentStore = useInterviewStore.getState();
-        const selectedVoiceId = currentStore.selectedVoiceId;
-
-        currentStore.setAIState("thinking");
+        let selectedVoiceId = currentStore.selectedVoiceId;
 
         if (isPlacementViva) {
           currentStore.setInterviewMode("dynamic");
@@ -767,25 +837,97 @@ export function InterviewClient({
           currentStore.setCurrentQuestion(VIVA_STAGES[0] as any, 0);
 
           let openingText = "";
-          try {
-            const res = await fetch(`/api/interviews/${interview.id}/start`, {
+          const preSeeded = existingMessages.find((m) => m.role === "assistant" && m.content?.trim());
+          if (preSeeded?.content) {
+            openingText = preSeeded.content;
+            const openLower = openingText.toLowerCase();
+            if (openLower.includes("i'm arun") || openLower.includes("i am arun")) {
+              currentStore.setSelectedVoiceId("gnani_arun");
+              selectedVoiceId = "gnani_arun";
+            } else if (openLower.includes("i'm nalini") || openLower.includes("i am nalini")) {
+              currentStore.setSelectedVoiceId("gnani_nalini");
+              selectedVoiceId = "gnani_nalini";
+            } else if (openLower.includes("i'm pooja") || openLower.includes("i am pooja")) {
+              currentStore.setSelectedVoiceId("gnani_pooja");
+              selectedVoiceId = "gnani_pooja";
+            }
+
+            // Immediately mark AI as speaking with zero delay (no spinning amber state)
+            if (!currentStore.isSpeakerMuted) {
+              currentStore.setAIState("speaking");
+            }
+
+            // Background sync start timestamp asynchronously without blocking UI or TTS
+            fetch(`/api/interviews/${interview.id}/start`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ voiceId: selectedVoiceId, interviewStyle }),
-            });
+              body: JSON.stringify({
+                voiceId: currentStore.selectedVoiceId,
+                interviewStyle,
+                spokenLanguage: currentStore.sttLanguage || "en-IN",
+              }),
+            }).catch(() => {});
+          } else {
+            currentStore.setAIState("thinking");
+            try {
+              const res = await fetch(`/api/interviews/${interview.id}/start`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  voiceId: currentStore.selectedVoiceId,
+                  interviewStyle,
+                  spokenLanguage: currentStore.sttLanguage || "en-IN",
+                }),
+              });
 
-            if (res.ok) {
-              const data = await res.json();
-              if (data.message && data.message.trim()) {
-                openingText = data.message;
+              if (res.ok) {
+                const data = await res.json();
+                if (data.message && data.message.trim()) {
+                  openingText = data.message;
+                }
+                if (data.voiceId) {
+                  currentStore.setSelectedVoiceId(data.voiceId);
+                  selectedVoiceId = data.voiceId;
+                }
               }
+            } catch (error) {
+              console.error("Start viva error:", error);
             }
-          } catch (error) {
-            console.error("Start viva error:", error);
+          }
+
+          if (openingText) {
+            const openLower = openingText.toLowerCase();
+            if (openLower.includes("i'm arun") || openLower.includes("i am arun") || openLower.includes("i'm ramesh") || openLower.includes("i am ramesh")) {
+              currentStore.setSelectedVoiceId("gnani_arun");
+              selectedVoiceId = "gnani_arun";
+            } else if (openLower.includes("i'm nalini") || openLower.includes("i am nalini")) {
+              currentStore.setSelectedVoiceId("gnani_nalini");
+              selectedVoiceId = "gnani_nalini";
+            } else if (openLower.includes("i'm pooja") || openLower.includes("i am pooja")) {
+              currentStore.setSelectedVoiceId("gnani_pooja");
+              selectedVoiceId = "gnani_pooja";
+            }
           }
 
           if (!openingText) {
-            openingText = `Hi, I'm Ananya, and I'll be conducting your Placement Viva today. I'm excited to review your background and dive into your featured project. To get started with Stage 1, please introduce yourself and tell me a bit about your journey into full-stack development.`;
+            const isFemale = selectedVoiceId
+              ? selectedVoiceId.includes("nalini") ||
+                selectedVoiceId.includes("pooja") ||
+                selectedVoiceId.startsWith("af_") ||
+                selectedVoiceId.startsWith("if_") ||
+                selectedVoiceId.startsWith("bf_") ||
+                selectedVoiceId.includes("female") ||
+                selectedVoiceId === "local_female"
+              : true;
+            const fallbackInterviewerName = (selectedVoiceId && (selectedVoiceId.includes("arun") || selectedVoiceId.includes("arav") || selectedVoiceId.includes("male") ? "Arun" : selectedVoiceId.includes("pooja") ? "Pooja" : "Nalini")) || (isFemale ? "Nalini" : "Arun");
+            const lang = currentStore.sttLanguage || "en-IN";
+            if (lang.startsWith("hi")) {
+              openingText = `नमस्ते! मैं ${fallbackInterviewerName} हूँ, और आज मैं आपका प्लेसमेंट वायवा इंटरव्यू लूँगी। मैंने आपकी प्रोफाइल और आपके प्रोजेक्ट्स को देखा है। स्टेज 1 शुरू करने के लिए, कृपया अपना परिचय दें और सॉफ्टवेयर इंजीनियरिंग में अपनी यात्रा के बारे में संक्षेप में बताएं।`;
+            } else if (lang.startsWith("kn")) {
+              openingText = `ನಮಸ್ಕಾರ! ನಾನು ${fallbackInterviewerName}, ಮತ್ತು ಇಂದು ನಾನು ನಿಮ್ಮ ಪ್ಲೇಸ್‌ಮೆಂಟ್ ವೈವಾ ಇಂಟರ್ವ್ಯೂ ನಡೆಸಲಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ ಮತ್ತು ನಿಮ್ಮ ತಾಂತ್ರಿಕ ಪ್ರಯಾಣದ ಬಗ್ಗೆ ತಿಳಿಸಿ.`;
+            } else {
+              openingText = `Hi, I'm ${fallbackInterviewerName}, and I'll be conducting your Placement Viva today. I'm excited to review your background and dive into your featured project. To get started with Stage 1, please introduce yourself and tell me a bit about your journey into full-stack development.`;
+            }
           }
 
           const startMsgId = `msg-start-${Date.now()}`;
@@ -898,40 +1040,61 @@ export function InterviewClient({
         }
 
         // 2. Fallback to Full Dynamic AI Mode
+        selectedVoiceId = currentStore.selectedVoiceId;
         const INDIAN_VOICE_NAME_MAP: Record<string, string> = {
-          am_adam: "Aarav",
+          gnani_nalini: "Nalini",
+          gnani_pooja: "Pooja",
+          gnani_arun: "Arun",
+          nalini: "Nalini",
+          pooja: "Pooja",
+          arun: "Arun",
+          local_female: "Nalini",
+          local_male: "Arun",
+          am_adam: "Arun",
           am_michael: "Rohan",
           am_fenrir: "Vikram",
           am_puck: "Kabir",
           am_echo: "Aditya",
-          af_heart: "Ananya",
+          af_heart: "Nalini",
           af_bella: "Diya",
           af_sarah: "Isha",
           af_nicole: "Kavya",
           af_sky: "Meera",
           if_sara: "Priya",
-          minimax_male_presenter: "Dev",
-          minimax_female_shaonv: "Riya",
-          minimax_female_yujie: "Sanya",
-          gemini_alloy: "Neer",
-          gemini_echo: "Siddharth",
-          gemini_onyx: "Varun",
-          gemini_nova: "Tara",
-          gemini_shimmer: "Neha",
-          local_male: "Aarav",
-          local_female: "Ananya",
+          minimax_male_presenter: "Arun",
+          minimax_female_shaonv: "Pooja",
+          minimax_female_yujie: "Nalini",
+          gemini_alloy: "Arun",
+          gemini_echo: "Arun",
+          gemini_onyx: "Arun",
+          gemini_nova: "Pooja",
+          gemini_shimmer: "Nalini",
         };
 
-        const isFemale = selectedVoiceId && (selectedVoiceId.startsWith("af_") || selectedVoiceId.startsWith("if_") || selectedVoiceId.startsWith("bf_") || selectedVoiceId.includes("female") || selectedVoiceId === "gemini_nova" || selectedVoiceId === "gemini_shimmer");
+        const isFemale = selectedVoiceId
+          ? selectedVoiceId.includes("nalini") ||
+            selectedVoiceId.includes("pooja") ||
+            selectedVoiceId.startsWith("af_") ||
+            selectedVoiceId.startsWith("if_") ||
+            selectedVoiceId.startsWith("bf_") ||
+            selectedVoiceId.includes("female") ||
+            selectedVoiceId === "gemini_nova" ||
+            selectedVoiceId === "gemini_shimmer" ||
+            selectedVoiceId === "local_female"
+          : true;
         const mappedName = selectedVoiceId ? INDIAN_VOICE_NAME_MAP[selectedVoiceId] : undefined;
-        const interviewerName = mappedName || (isFemale ? "Ananya" : "Aarav");
+        const interviewerName = mappedName || (isFemale ? "Nalini" : "Arun");
 
         let openingText = "";
         try {
           const res = await fetch(`/api/interviews/${interview.id}/start`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ voiceId: selectedVoiceId, interviewStyle }),
+            body: JSON.stringify({
+              voiceId: selectedVoiceId,
+              interviewStyle,
+              spokenLanguage: currentStore.sttLanguage || "en-IN",
+            }),
           });
 
           if (res.ok) {
@@ -945,7 +1108,14 @@ export function InterviewClient({
         }
 
         if (!openingText) {
-          openingText = `Hi, I'm ${interviewerName}. Welcome to your ${interview.difficulty} coding interview. Take a moment to read the problem, and when you're ready, share your initial thoughts on how you'd approach it.`;
+          const lang = currentStore.sttLanguage || "en-IN";
+          if (lang.startsWith("hi")) {
+            openingText = `नमस्ते, मैं ${interviewerName} हूँ। आपके ${interview.difficulty} कोडिंग इंटरव्यू में आपका स्वागत है। समस्या को पढ़ें और जब आप तैयार हों, अपने दृष्टिकोण के बारे में बताएं।`;
+          } else if (lang.startsWith("kn")) {
+            openingText = `ನಮಸ್ಕಾರ, ನಾನು ${interviewerName}। ನಿಮ್ಮ ${interview.difficulty} ಕೋಡಿಂಗ್ ಸಂದರ್ಶನಕ್ಕೆ ಸುಸ್ವಾಗತ।`;
+          } else {
+            openingText = `Hi, I'm ${interviewerName}. Welcome to your ${interview.difficulty} coding interview. Take a moment to read the problem, and when you're ready, share your initial thoughts on how you'd approach it.`;
+          }
         }
 
         const startMsgId = `msg-start-${Date.now()}`;
@@ -1069,7 +1239,14 @@ export function InterviewClient({
   ) : null;
 
   if (!lobbyCompleted) {
-    return <InterviewLobby onReady={handleLobbyReady} />;
+    return (
+      <InterviewLobby
+        onReady={handleLobbyReady}
+        jobRole={interview.jobRole}
+        problemTitle={interview.problemTitle}
+        problemDescription={interview.problemDescription}
+      />
+    );
   }
 
   // ─── Dynamic Category View Router ────────────────────────

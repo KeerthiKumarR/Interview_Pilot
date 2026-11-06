@@ -107,7 +107,7 @@ INTERVIEW CONDUCT RULES:
 2. Project Deep-Dive: Connect technical and architecture questions directly to their projects (e.g. "${projects[0]?.title || "your recent project"}"). Explicitly ask questions like "Walk me through how you architected and deployed this project."
 3. 15-20 Minute Structured Pacing: Maintain momentum across coding, technical discussion, and live system analysis suitable for a 15 or 20-minute mock interview.
 4. Behavioral & HR Questions: Integrate 1–2 behavioral HR questions (e.g., resolving technical disagreements, handling production incidents, or what type of team culture they thrive in).
-5. Professional Persona: Maintain an encouraging yet rigorous interviewer persona (female interviewer "Ananya").
+5. Professional Persona: Maintain an encouraging yet rigorous senior engineering interviewer persona.
 ======================================================================
 `;
 }

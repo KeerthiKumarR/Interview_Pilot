@@ -5,17 +5,21 @@ import { InterviewClient } from "@/features/interview/components/interview-clien
 
 interface InterviewPageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ lang?: string; voice?: string }>;
 }
 
 /**
  * Interview page — Server Component that fetches interview data
  * and passes it to the client-side interview UI.
  */
-export default async function InterviewPage({ params }: InterviewPageProps) {
+export default async function InterviewPage({ params, searchParams }: InterviewPageProps) {
   const { userId: clerkId } = await auth();
   if (!clerkId) redirect("/sign-in");
 
   const { id } = await params;
+  const search = searchParams ? await searchParams : {};
+  const initialSpokenLanguage = search?.lang;
+  const initialVoiceId = search?.voice;
 
   // Fetch or auto-sync user data
   let user = await prisma.user.findUnique({
@@ -87,6 +91,8 @@ export default async function InterviewPage({ params }: InterviewPageProps) {
         jobRole: interview.jobRole,
         questions: roleQuestions,
       }}
+      initialSpokenLanguage={initialSpokenLanguage}
+      initialVoiceId={initialVoiceId}
       existingMessages={interview.messages.map((m) => ({
         id: m.id,
         role: m.role as "assistant" | "user" | "system",

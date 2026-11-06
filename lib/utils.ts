@@ -94,3 +94,37 @@ export function isSpeechSynthesisSupported(): boolean {
   if (typeof window === "undefined") return false;
   return "speechSynthesis" in window;
 }
+
+/**
+ * Professional sanitization for interview dialogue, chat logs, and spoken subtitles.
+ * Ensures the candidate NEVER sees or hears internal thinking blocks, token/credit chatter,
+ * or system control tags.
+ */
+export function cleanInterviewChatText(text: string): string {
+  if (!text) return "";
+  return text
+    // Complete thinking blocks
+    .replace(/(?:\*Thinking\.\.\.\*[\s\S]*?---\s*\n?)/gi, "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "")
+    .replace(/^Thinking\.\.\.[\s\S]*?---\s*\n?/gi, "")
+    .replace(/(?:^|\n)Thinking Process:?[\s\S]*?(?:---\n|Final Answer:|\n\n)/gi, "")
+    // Incomplete thinking blocks during active streaming
+    .replace(/<think>[\s\S]*$/gi, "")
+    .replace(/(?:\*Thinking\.\.\.\*[\s\S]*)$/gi, "")
+    // Internal control signals and stage markers
+    .replace(/\[STAGE:\s*[1-4]\]/gi, "")
+    .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
+    .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
+    // AI meta-commentary: tokens, credits, quota, costs
+    .replace(/(?:tokens?\s*(?:used|count|remaining|left)?|cost|latency|balance|quota|credits?):\s*[\d$.,]+(?:\s*(?:tokens|credits|cents|usd))?/gi, "")
+    .replace(/(?:remaining credits?|tokens? used|credits? left)\s*:\s*\S+/gi, "")
+    .replace(/(?:see(?:ing)?|check(?:ing)?)\s+(?:credits?|tokens?)/gi, "")
+    // Formatting cleanup
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\\\*/g, "")
+    .replace(/\*{2,}/g, "")
+    .trim();
+}

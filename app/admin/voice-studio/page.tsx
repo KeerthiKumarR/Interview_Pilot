@@ -80,7 +80,7 @@ interface Question {
 const VOICE_OPTIONS = [
   { id: "af_heart", name: "Sarah (Warm Female - Kokoro)" },
   { id: "af_bella", name: "Bella (Professional Female - Kokoro)" },
-  { id: "am_adam", name: "Aarav (Professional Male - Kokoro)" },
+  { id: "am_adam", name: "Arun (Professional Male - Kokoro)" },
   { id: "am_michael", name: "Rohan (Clear Male - Kokoro)" },
   { id: "gemini_nova", name: "Nova (Conversational Female - OpenAI)" },
   { id: "gemini_echo", name: "Siddharth (Calm Male - OpenAI)" },
@@ -1069,7 +1069,7 @@ function VoiceStudioContent() {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-blue-500" />
-                      Dynamic AI Pipeline Active
+                      Dynamic Evaluation Engine Active
                     </span>
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-secondary text-muted-foreground border border-border">
                       0 Manual Questions Needed

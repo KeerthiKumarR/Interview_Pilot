@@ -36,33 +36,49 @@ export function AIAvatar() {
   };
 
 const INDIAN_VOICE_NAME_MAP: Record<string, string> = {
-  am_adam: "Aarav",
+  gnani_nalini: "Nalini",
+  gnani_pooja: "Pooja",
+  gnani_arun: "Arun",
+  nalini: "Nalini",
+  pooja: "Pooja",
+  arun: "Arun",
+  local_female: "Nalini",
+  local_male: "Arun",
+  am_adam: "Arun",
   am_michael: "Rohan",
   am_fenrir: "Vikram",
   am_puck: "Kabir",
   am_echo: "Aditya",
-  af_heart: "Ananya",
+  af_heart: "Nalini",
   af_bella: "Diya",
   af_sarah: "Isha",
   af_nicole: "Kavya",
   af_sky: "Meera",
   if_sara: "Priya",
-  minimax_male_presenter: "Dev",
-  minimax_female_shaonv: "Riya",
-  minimax_female_yujie: "Sanya",
-  gemini_alloy: "Neer",
-  gemini_echo: "Siddharth",
-  gemini_onyx: "Varun",
-  gemini_nova: "Tara",
-  gemini_shimmer: "Neha",
-  local_male: "Aarav",
-  local_female: "Ananya",
+  minimax_male_presenter: "Arun",
+  minimax_female_shaonv: "Pooja",
+  minimax_female_yujie: "Nalini",
+  gemini_alloy: "Arun",
+  gemini_echo: "Arun",
+  gemini_onyx: "Arun",
+  gemini_nova: "Pooja",
+  gemini_shimmer: "Nalini",
 };
 
   const selectedVoiceId = useInterviewStore((s) => s.selectedVoiceId);
-  const isFemale = selectedVoiceId && (selectedVoiceId.startsWith("af_") || selectedVoiceId.startsWith("if_") || selectedVoiceId.startsWith("bf_") || selectedVoiceId.includes("female") || selectedVoiceId === "gemini_nova" || selectedVoiceId === "gemini_shimmer");
+  const isFemale = selectedVoiceId
+    ? selectedVoiceId.includes("nalini") ||
+      selectedVoiceId.includes("pooja") ||
+      selectedVoiceId.startsWith("af_") ||
+      selectedVoiceId.startsWith("if_") ||
+      selectedVoiceId.startsWith("bf_") ||
+      selectedVoiceId.includes("female") ||
+      selectedVoiceId === "gemini_nova" ||
+      selectedVoiceId === "gemini_shimmer" ||
+      selectedVoiceId === "local_female"
+    : true;
   const mappedName = selectedVoiceId ? INDIAN_VOICE_NAME_MAP[selectedVoiceId] : undefined;
-  const interviewerName = mappedName || (isFemale ? "Ananya" : "Aarav");
+  const interviewerName = mappedName || (isFemale ? "Nalini" : "Arun");
 
   const label = getLabel();
 

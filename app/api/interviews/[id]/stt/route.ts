@@ -16,7 +16,41 @@ export async function POST(
       );
     }
 
-    // 1. Try ultra-fast, high-accuracy Groq Whisper if available
+    const requestedLanguage = (formData.get("language") as string) || "en-IN";
+
+    // 1. Primary: Gnani.ai Prisma ASR (Native Multilingual Indian Accents & Code-Mixing)
+    const gnaniApiKey = process.env.GNANI_API_KEY;
+    if (gnaniApiKey) {
+      try {
+        const gnaniFormData = new FormData();
+        gnaniFormData.append("audio_file", file, "audio.wav");
+        gnaniFormData.append("language_code", requestedLanguage);
+
+        const gnaniRes = await fetch("https://api.vachana.ai/stt/v3", {
+          method: "POST",
+          headers: {
+            "X-API-Key-ID": gnaniApiKey,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
+          },
+          body: gnaniFormData,
+        });
+
+        if (gnaniRes.ok) {
+          const data = await gnaniRes.json();
+          const transcript = data.transcript || data.output?.literal || "";
+          if (transcript.trim()) {
+            return NextResponse.json({ text: transcript.trim(), provider: "gnani-prisma" });
+          }
+        } else {
+          const errText = await gnaniRes.text();
+          console.warn("Gnani Prisma STT returned non-OK:", gnaniRes.status, errText);
+        }
+      } catch (err) {
+        console.warn("Gnani Prisma STT call error, falling back:", err);
+      }
+    }
+
+    // 2. High-speed Fallback: Groq Whisper if available
     const groqApiKey = process.env.GROQ_API_KEY;
     if (groqApiKey) {
       try {
@@ -56,9 +90,9 @@ export async function POST(
     const openRouterApiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.OPENROUTER_STT_MODEL || "openai/whisper-large-v3";
 
-    if (!openRouterApiKey && !groqApiKey) {
+    if (!openRouterApiKey && !groqApiKey && !gnaniApiKey) {
       return NextResponse.json(
-        { error: "No STT provider (Groq or OpenRouter) configured" },
+        { error: "Speech-to-text service unavailable. Please check microphone or audio service settings." },
         { status: 500 }
       );
     }

@@ -70,38 +70,45 @@ export function CodingWorkspaceView({
     if (!isViva) return null;
 
     let roleName = "Software Engineer";
+    let companyName = "";
     let projectTitle: string | null = null;
     let liveUrl: string | null = null;
     let repoUrl: string | null = null;
     let techStack: string | null = null;
 
+    if (problemDescription) {
+      const roleMatch = problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
+      if (roleMatch && roleMatch[1]?.trim()) roleName = roleMatch[1].trim();
+      const compMatch = problemDescription.match(/\-\s*\*\*Target Company\*\*:\s*([^\n\r]+)/i);
+      if (compMatch && compMatch[1]?.trim()) companyName = compMatch[1].trim();
+      const stackMatch = problemDescription.match(/\-\s*\*\*(?:Required Stack|Verified Tech Stack)\*\*:\s*([^\n\r]+)/i);
+      if (stackMatch && stackMatch[1]?.trim()) techStack = stackMatch[1].trim();
+      const liveMatch = problemDescription.match(/\-\s*\*\*Live Deployment\*\*:\s*([^\n\r]+)/i);
+      if (liveMatch && liveMatch[1]?.trim().startsWith("http")) liveUrl = liveMatch[1].trim();
+      const repoMatch = problemDescription.match(/\-\s*\*\*Source Code Repository\*\*:\s*([^\n\r]+)/i);
+      if (repoMatch && repoMatch[1]?.trim().startsWith("http")) repoUrl = repoMatch[1].trim();
+    }
+
     if (problemTitle) {
-      if (problemTitle.includes(":")) {
+      if (problemTitle.includes("Technical Viva:")) {
+        const parts = problemTitle.split("Technical Viva:");
+        if (!companyName) companyName = parts[0]?.trim();
+        if (parts[1]?.trim()) roleName = parts[1].trim();
+      } else if (problemTitle.includes(":")) {
         const parts = problemTitle.split(":");
-        roleName = parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
+        if (!roleName || roleName === "Software Engineer") {
+          roleName = parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
+        }
         projectTitle = parts[1].trim();
-      } else {
+      } else if (!roleName || roleName === "Software Engineer") {
         roleName = problemTitle.replace(/Placement Viva/i, "").trim() || "Software Engineer";
       }
     }
 
-    if (problemDescription) {
-      const liveMatch = problemDescription.match(/\-\s*\*\*Live Deployment\*\*:\s*([^\n\r]+)/i);
-      if (liveMatch && liveMatch[1]?.trim().startsWith("http")) {
-        liveUrl = liveMatch[1].trim();
-      }
-      const repoMatch = problemDescription.match(/\-\s*\*\*Source Code Repository\*\*:\s*([^\n\r]+)/i);
-      if (repoMatch && repoMatch[1]?.trim().startsWith("http")) {
-        repoUrl = repoMatch[1].trim();
-      }
-      const stackMatch = problemDescription.match(/\-\s*\*\*Verified Tech Stack\*\*:\s*([^\n\r]+)/i);
-      if (stackMatch && stackMatch[1]?.trim()) {
-        techStack = stackMatch[1].trim();
-      }
-    }
+    const displayRole = companyName ? `${roleName} (${companyName})` : roleName;
 
     return {
-      roleName,
+      roleName: displayRole,
       projectTitle,
       liveUrl,
       repoUrl,
@@ -346,7 +353,7 @@ export function CodingWorkspaceView({
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <span>{isViva ? "Viva Dossier" : "Problem"}</span>
+            <span>{isViva ? "Session Overview" : "Problem"}</span>
             {activeProblemTab === "problem" && (
               <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
             )}
@@ -411,7 +418,7 @@ export function CodingWorkspaceView({
                 }`}
               >
                 <HelpCircle className="h-3 w-3" />
-                <span>Viva Rubric & Tips</span>
+                <span>Rubric & Tips</span>
                 {activeProblemTab === "hints" && (
                   <div className="absolute -bottom-3 left-0 right-0 h-0.5 bg-foreground rounded-full" />
                 )}
@@ -464,10 +471,10 @@ export function CodingWorkspaceView({
                       </div>
                       <div>
                         <h4 className="text-sm font-semibold text-foreground">
-                          {vivaMetadata?.projectTitle ? `Featured Project: ${vivaMetadata.projectTitle}` : "Placement Candidate Dossier"}
+                          {vivaMetadata?.projectTitle ? `Featured Project: ${vivaMetadata.projectTitle}` : "Candidate Profile"}
                         </h4>
                         <p className="text-[11px] text-muted-foreground">
-                          Verified project in scope for live technical defense & viva
+                          Featured project in scope for technical discussion
                         </p>
                       </div>
                     </div>
@@ -538,7 +545,7 @@ export function CodingWorkspaceView({
                     <h5 className="text-xs font-semibold text-foreground uppercase tracking-wider">
                       Evaluation Objectives & Rubric
                     </h5>
-                    <span className="text-[11px] text-muted-foreground">15–20 Mins Defense</span>
+                    <span className="text-[11px] text-muted-foreground">15–20 Mins</span>
                   </div>
 
                   <div className="space-y-2">
@@ -591,7 +598,7 @@ export function CodingWorkspaceView({
                 <div className="rounded-xl border border-border/60 bg-muted/40 p-3 text-[11.5px] text-muted-foreground flex items-start gap-2.5">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 mt-1 shrink-0 animate-pulse" />
                   <div className="space-y-0.5">
-                    <p className="font-semibold text-foreground text-xs">Live Voice Viva Active</p>
+                    <p className="font-semibold text-foreground text-xs">Live Voice Active</p>
                     <p>The AI interviewer converses with you in real-time. Use the scratchpad editor on the right if requested to draft an API endpoint, middleware, or optimize logic.</p>
                   </div>
                 </div>
@@ -706,7 +713,7 @@ export function CodingWorkspaceView({
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
               <HelpCircle className="h-4 w-4 text-primary" />
-              <span>{isViva ? "Placement Viva Evaluation Rubric" : "Interviewer Algorithmic Hints"}</span>
+              <span>{isViva ? "Evaluation Rubric" : "Interviewer Algorithmic Hints"}</span>
             </div>
             {isViva ? (
               <div className="rounded-xl border border-border bg-secondary/25 p-3.5 text-xs text-muted-foreground space-y-3 leading-relaxed">

@@ -6,8 +6,8 @@ import path from "path";
 
 /**
  * POST /api/admin/questions/generate-voice
- * Generates an MP3 audio file for a question's prompt text using TTS,
- * saves it into public/audio/questions/[questionId].mp3,
+ * Generates an audio file for a question's prompt text using Gnani.ai Timbre TTS,
+ * saves it into public/audio/questions/[questionId].wav,
  * and attaches the audioUrl to the question in the database.
  */
 export async function POST(req: Request) {
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { questionId, text, voice = "af_heart" } = body;
+    const { questionId, text, voice = "gnani_nalini" } = body;
 
     if (!questionId || !text) {
       return NextResponse.json(
@@ -26,6 +26,75 @@ export async function POST(req: Request) {
       );
     }
 
+    // Sanitize text for speech
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/[*`_#]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // ─── 🇮🇳 Primary: Gnani.ai Timbre Voice Engine ───────────────────────
+    const gnaniApiKey = process.env.GNANI_API_KEY;
+    if (gnaniApiKey) {
+      try {
+        let gnaniVoice = "Nalini";
+        if (voice === "gnani_arun" || voice === "arun" || voice?.includes("male") || voice?.includes("ramesh")) gnaniVoice = "Deepak";
+        else if (voice === "gnani_pooja" || voice === "pooja") gnaniVoice = "Pooja";
+        else gnaniVoice = "Nalini";
+
+        const gnaniModel = process.env.GNANI_TIMBRE_MODEL || "timbre-v2.5";
+        const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key-ID": gnaniApiKey,
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
+          },
+          body: JSON.stringify({
+            text: cleanText,
+            voice: gnaniVoice,
+            model: gnaniModel,
+            language: "en-IN",
+            speed: 1,
+            audio_config: {
+              container: "wav",
+            },
+          }),
+        });
+
+        if (gnaniRes.ok) {
+          const audioArrayBuffer = await gnaniRes.arrayBuffer();
+          const audioBuffer = Buffer.from(audioArrayBuffer);
+
+          const audioDir = path.join(process.cwd(), "public", "audio", "questions");
+          await fs.mkdir(audioDir, { recursive: true });
+
+          const fileName = `${questionId}.wav`;
+          const filePath = path.join(audioDir, fileName);
+          await fs.writeFile(filePath, audioBuffer);
+
+          const audioUrl = `/audio/questions/${fileName}?t=${Date.now()}`;
+
+          await prisma.interviewQuestion.update({
+            where: { id: questionId },
+            data: {
+              audioUrl,
+              audioSource: "generated",
+            },
+          });
+
+          return NextResponse.json({
+            success: true,
+            audioUrl,
+            provider: "gnani-timbre",
+          });
+        }
+      } catch (err) {
+        console.warn("Gnani Timbre question audio generation failed, trying fallback:", err);
+      }
+    }
+
+    // ─── Fallback Voice Synthesis ──────────────────────────────────────────
     let openRouterApiKey = process.env.OPENROUTER_API_KEY;
     if (!openRouterApiKey) {
       try {
@@ -36,86 +105,63 @@ export async function POST(req: Request) {
       } catch {}
     }
 
-    if (!openRouterApiKey) {
+    if (!openRouterApiKey && !gnaniApiKey) {
       return NextResponse.json(
-        {
-          error:
-            "OPENROUTER_API_KEY is not configured in Admin Settings or .env.local. Please configure your key in Admin Settings to generate audio voices.",
-        },
+        { error: "No voice synthesis service configured. Please provide GNANI_API_KEY in environment." },
         { status: 500 }
       );
     }
 
-    // Determine model based on voice prefix
-    let targetModel = process.env.OPENROUTER_TTS_MODEL || "hexgrad/kokoro-82m";
-    let targetVoice = voice;
+    if (openRouterApiKey) {
+      const targetModel = process.env.OPENROUTER_TTS_MODEL || "hexgrad/kokoro-82m";
+      const targetVoice = "af_heart";
 
-    if (voice.startsWith("minimax_")) {
-      targetModel = "minimax/speech-01";
-      targetVoice = voice === "minimax_male_presenter" ? "presenter_male" : "female-shaonv";
-    } else if (voice.startsWith("gemini_")) {
-      targetModel = "openai/tts-1";
-      targetVoice = voice.replace("gemini_", "");
+      const ttsResponse = await fetch("https://openrouter.ai/api/v1/audio/speech", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openRouterApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          input: cleanText,
+          voice: targetVoice,
+          response_format: "mp3",
+        }),
+      });
+
+      if (ttsResponse.ok) {
+        const audioArrayBuffer = await ttsResponse.arrayBuffer();
+        const audioBuffer = Buffer.from(audioArrayBuffer);
+
+        const audioDir = path.join(process.cwd(), "public", "audio", "questions");
+        await fs.mkdir(audioDir, { recursive: true });
+
+        const fileName = `${questionId}.mp3`;
+        const filePath = path.join(audioDir, fileName);
+        await fs.writeFile(filePath, audioBuffer);
+
+        const audioUrl = `/audio/questions/${fileName}?t=${Date.now()}`;
+
+        await prisma.interviewQuestion.update({
+          where: { id: questionId },
+          data: {
+            audioUrl,
+            audioSource: "generated",
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          audioUrl,
+        });
+      }
     }
 
-    // Sanitize text for speech
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, " ")
-      .replace(/[*`_#]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // Call OpenRouter TTS API
-    const ttsResponse = await fetch("https://openrouter.ai/api/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        input: cleanText,
-        voice: targetVoice,
-        response_format: "mp3",
-      }),
-    });
-
-    if (!ttsResponse.ok) {
-      const errorText = await ttsResponse.text();
-      console.error("OpenRouter TTS generation failed:", ttsResponse.status, errorText);
-      return NextResponse.json(
-        { error: `TTS synthesis failed (${ttsResponse.status}): ${errorText}` },
-        { status: ttsResponse.status }
-      );
-    }
-
-    const audioArrayBuffer = await ttsResponse.arrayBuffer();
-    const audioBuffer = Buffer.from(audioArrayBuffer);
-
-    // Ensure target folder exists
-    const audioDir = path.join(process.cwd(), "public", "audio", "questions");
-    await fs.mkdir(audioDir, { recursive: true });
-
-    // Save audio file as questionId.mp3
-    const fileName = `${questionId}.mp3`;
-    const filePath = path.join(audioDir, fileName);
-    await fs.writeFile(filePath, audioBuffer);
-
-    const audioUrl = `/audio/questions/${fileName}?t=${Date.now()}`;
-
-    // Update database record
-    await prisma.interviewQuestion.update({
-      where: { id: questionId },
-      data: {
-        audioUrl,
-        audioSource: "generated",
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      audioUrl,
-    });
+    return NextResponse.json(
+      { error: "Voice synthesis failed. Please verify voice engine credentials." },
+      { status: 500 }
+    );
   } catch (error: unknown) {
     console.error("Error generating question audio:", error);
     const message = error instanceof Error ? error.message : "Failed to generate audio";

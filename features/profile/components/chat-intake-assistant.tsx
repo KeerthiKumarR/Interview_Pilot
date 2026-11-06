@@ -143,7 +143,7 @@ export function ChatIntakeAssistant({ onApplyExtracted }: ChatIntakeAssistantPro
           </CardTitle>
           <Badge variant="outline" className="border-primary/30 text-primary text-[11px] gap-1">
             <Sparkles className="size-3" />
-            Module 1 Chat Intake
+            AI Profile Assistant
           </Badge>
         </div>
         <CardDescription>

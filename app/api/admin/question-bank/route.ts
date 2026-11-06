@@ -99,55 +99,49 @@ export async function GET(req: Request) {
     const difficulty = url.searchParams.get("difficulty");
     const search = url.searchParams.get("search")?.toLowerCase().trim();
 
-    // Check count and auto-seed if bank is empty
+    // Check count and auto-seed in a single bulk transaction if bank is empty
     const count = await prisma.questionBankItem.count();
     if (count === 0) {
-      // Seed first 12 coding problems from CODING_PROBLEMS
-      const initialCoding = CODING_PROBLEMS.slice(0, 15);
-      for (const p of initialCoding) {
-        // Derive test cases from examples
+      const codingItems = CODING_PROBLEMS.slice(0, 15).map((p) => {
         const testCases = p.examples.map((ex, idx) => ({
           input: ex.input,
           expectedOutput: ex.output,
           isHidden: idx > 0,
         }));
+        return {
+          title: p.title,
+          category: "code_editor",
+          difficulty: p.difficulty,
+          stage: "coding",
+          durationMinutes: p.difficulty === "hard" ? 20 : p.difficulty === "medium" ? 15 : 10,
+          promptText: p.description,
+          examples: (p.examples as unknown as Prisma.InputJsonValue) ?? undefined,
+          constraints: (p.constraints as unknown as Prisma.InputJsonValue) ?? undefined,
+          testCases: (testCases as unknown as Prisma.InputJsonValue) ?? undefined,
+          starterCode: (p.starterCode as unknown as Prisma.InputJsonValue) ?? undefined,
+          skillTags: (p.tags as unknown as Prisma.InputJsonValue) ?? undefined,
+          isActive: true,
+        };
+      });
 
-        await prisma.questionBankItem.create({
-          data: {
-            title: p.title,
-            category: "code_editor",
-            difficulty: p.difficulty,
-            stage: "coding",
-            durationMinutes: p.difficulty === "hard" ? 20 : p.difficulty === "medium" ? 15 : 10,
-            promptText: p.description,
-            examples: (p.examples as unknown as Prisma.InputJsonValue) ?? undefined,
-            constraints: (p.constraints as unknown as Prisma.InputJsonValue) ?? undefined,
-            testCases: (testCases as unknown as Prisma.InputJsonValue) ?? undefined,
-            starterCode: (p.starterCode as unknown as Prisma.InputJsonValue) ?? undefined,
-            skillTags: (p.tags as unknown as Prisma.InputJsonValue) ?? undefined,
-            isActive: true,
-          },
-        });
-      }
+      const quizItems = INITIAL_QUIZ_PROBLEMS.map((q) => ({
+        title: q.title,
+        category: q.category,
+        difficulty: q.difficulty,
+        stage: q.stage,
+        durationMinutes: q.durationMinutes,
+        promptText: q.promptText,
+        options: (q.options as unknown as Prisma.InputJsonValue) ?? undefined,
+        correctOption: q.correctOption,
+        explanation: q.explanation,
+        skillTags: (q.skillTags as unknown as Prisma.InputJsonValue) ?? undefined,
+        isActive: true,
+      }));
 
-      // Seed initial quiz questions
-      for (const q of INITIAL_QUIZ_PROBLEMS) {
-        await prisma.questionBankItem.create({
-          data: {
-            title: q.title,
-            category: q.category,
-            difficulty: q.difficulty,
-            stage: q.stage,
-            durationMinutes: q.durationMinutes,
-            promptText: q.promptText,
-            options: (q.options as unknown as Prisma.InputJsonValue) ?? undefined,
-            correctOption: q.correctOption,
-            explanation: q.explanation,
-            skillTags: (q.skillTags as unknown as Prisma.InputJsonValue) ?? undefined,
-            isActive: true,
-          },
-        });
-      }
+      await prisma.questionBankItem.createMany({
+        data: [...codingItems, ...quizItems],
+        skipDuplicates: true,
+      });
     }
 
     // Build query filters
@@ -170,7 +164,14 @@ export async function GET(req: Request) {
       orderBy: [{ createdAt: "desc" }],
     });
 
-    return NextResponse.json({ questions, total: questions.length });
+    return NextResponse.json(
+      { questions, total: questions.length },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      }
+    );
   } catch (error) {
     console.error("GET /api/admin/question-bank error:", error);
     return NextResponse.json(

@@ -5,8 +5,8 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * PrismaClient singleton to prevent multiple instances in development.
- * Automatically selects hot-reloading context if available.
+ * PrismaClient singleton to prevent multiple instances across hot-reloading
+ * in development and serverless lambda execution reuse in production.
  */
 export const prisma =
   globalForPrisma.prisma ??
@@ -17,4 +17,4 @@ export const prisma =
         : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = prisma;

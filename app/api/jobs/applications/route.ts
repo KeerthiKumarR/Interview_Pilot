@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/jobs/applications
- * Returns the student's complete application pipeline.
+ * Returns the student's complete application history and status.
  */
 export async function GET() {
   try {

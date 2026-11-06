@@ -61,23 +61,23 @@ export function ReadinessHeroCard({
   const StatusIcon = details.icon;
 
   return (
-    <Card className="border-border shadow-xs bg-gradient-to-br from-card via-card to-muted/20 overflow-hidden relative">
-      <CardContent className="p-6 sm:p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          {/* Left: Overall Score + Narrative */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-            {/* Score Ring / Badge */}
-            <div className="relative flex size-24 sm:size-28 shrink-0 flex-col items-center justify-center rounded-3xl border-2 border-border/80 bg-background shadow-md">
-              <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
-                {overallScore}
-              </span>
-              <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">
-                / 100
-              </span>
-              <div className="absolute -top-2 -right-2 rounded-full bg-primary/10 border border-primary/20 p-1 text-primary">
-                <Sparkles className="size-3.5" />
-              </div>
+    <div className="rounded-3xl border-2 border-border bg-card p-6 sm:p-8 neo-shadow relative overflow-hidden">
+      <div className="h-1.5 w-full bg-[#34A853] absolute top-0 left-0" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-1">
+        {/* Left: Overall Score + Narrative */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+          {/* Score Ring / Badge */}
+          <div className="relative flex size-24 sm:size-28 shrink-0 flex-col items-center justify-center rounded-3xl border-2 border-black dark:border-white/80 bg-background neo-shadow-sm">
+            <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+              {overallScore}
+            </span>
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">
+              / 100
+            </span>
+            <div className="absolute -top-2 -right-2 rounded-full bg-primary text-primary-foreground border-2 border-black dark:border-white p-1">
+              <Sparkles className="size-3.5" />
             </div>
+          </div>
 
             {/* Information */}
             <div className="space-y-2 text-left">
@@ -120,7 +120,6 @@ export function ReadinessHeroCard({
             </p>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
   );
 }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { authorizeAdmin, authorizeStaff } from "@/lib/admin-auth";
 import { invalidateUserSessionCache } from "@/lib/auth-user";
 
@@ -13,38 +14,77 @@ export async function GET() {
   }
 
   try {
-    // Only return sensitive system settings and API keys to Super Admins
-    const settings = isAdmin ? await prisma.systemSetting.findMany() : [];
-    const feedbacks = await prisma.feedback.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: {
-          select: { name: true, email: true },
-        },
-      },
-    });
+    // 1. Automatically reconcile with Clerk to ensure all registered platform accounts are present in database
+    try {
+      const clerk = await clerkClient();
+      const clerkUsersResponse = await clerk.users.getUserList({ limit: 100 });
+      const clerkUsers = (clerkUsersResponse as any).data || clerkUsersResponse;
 
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        interviews: {
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            problemTitle: true,
-            difficulty: true,
-            createdAt: true,
-            status: true,
-            report: {
-              select: { overallScore: true, isSolved: true },
-            },
+      if (Array.isArray(clerkUsers) && clerkUsers.length > 0) {
+        await Promise.all(
+          clerkUsers.map(async (cu: any) => {
+            const email = cu.emailAddresses?.[0]?.emailAddress;
+            if (!email) return;
+            const name = `${cu.firstName || ""} ${cu.lastName || ""}`.trim() || "Candidate";
+            const imageUrl = cu.imageUrl || null;
+
+            return prisma.user.upsert({
+              where: { clerkId: cu.id },
+              update: {
+                email,
+                name,
+                ...(imageUrl ? { imageUrl } : {}),
+              },
+              create: {
+                clerkId: cu.id,
+                email,
+                name,
+                imageUrl,
+                role: email === "rvkeerthi99@gmail.com" ? "admin" : "student",
+              },
+            });
+          })
+        );
+      }
+    } catch (clerkSyncErr) {
+      console.warn("Could not sync Clerk users to DB:", clerkSyncErr);
+    }
+
+    // Fetch settings, recent feedbacks, and users concurrently in a single database round-trip
+    const [settings, feedbacks, users] = await Promise.all([
+      isAdmin ? prisma.systemSetting.findMany() : Promise.resolve([]),
+      prisma.feedback.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          user: {
+            select: { name: true, email: true },
           },
         },
-        _count: {
-          select: { interviews: true },
+      }),
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          interviews: {
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: {
+              id: true,
+              problemTitle: true,
+              difficulty: true,
+              createdAt: true,
+              status: true,
+              report: {
+                select: { overallScore: true, isSolved: true },
+              },
+            },
+          },
+          _count: {
+            select: { interviews: true },
+          },
         },
-      },
-    });
+      }),
+    ]);
 
     const settingsMap = settings.reduce((acc, s) => {
       acc[s.key] = s.value;

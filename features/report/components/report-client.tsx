@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Layers,
 } from "lucide-react";
+import { MatchedJobsSection } from "./matched-jobs-section";
 
 // ─── Staged Report Progress ─────────────────
 
@@ -137,6 +138,8 @@ interface ReportClientProps {
     code: string;
     style: string;
     createdAt: string;
+    jobRole?: { title: string } | null;
+    role?: string | null;
   };
   report: ReportData | null;
   messageCount: number;
@@ -381,42 +384,70 @@ export function ReportClient({
           {/* Executive Recruiter Card (Skill 2 Dynamic Evaluation) */}
           {(report.recruiterVerdict || report.recruiterNotes || report.skillScores) && (
             <div className="rounded-xl border border-primary/30 bg-card p-6 shadow-sm space-y-6">
-              {/* Verdict Header Banner */}
+              {/* Assessment Header Banner */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-                      Skill 2 &bull; Executive Lens
+                      Placement Readiness
                     </span>
                     <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-secondary text-muted-foreground">
-                      HR & Recruiter Decision Matrix
+                      Skill Assessment
                     </span>
                   </div>
                   <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                     <Award className="w-5 h-5 text-primary" />
-                    Executive Hiring Verdict & Candidate Assessment
+                    Interview Assessment & Recommendation
                   </h2>
                 </div>
 
                 {/* Verdict Badge */}
                 {(() => {
-                  const verdict = report.recruiterVerdict || "HIRE";
+                  const isIncomplete =
+                    report.estimatedLevel?.toLowerCase().includes("incomplete") ||
+                    messageCount < 4 ||
+                    report.recruiterVerdict === "INCOMPLETE";
+
+                  if (isIncomplete) {
+                    return (
+                      <div className="flex items-center gap-2 px-4 py-2 rounded-lg border font-bold text-sm tracking-wide bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Incomplete Session</span>
+                      </div>
+                    );
+                  }
+
+                  const verdict = report.recruiterVerdict || (
+                    report.overallScore >= 85 ? "STRONG_HIRE" :
+                    report.overallScore >= 70 ? "HIRE" :
+                    report.overallScore >= 50 ? "LEANING_NO" :
+                    "NO_HIRE"
+                  );
+
                   let badgeStyles = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
-                  let label = "Hire";
+                  let label = "Placement Ready";
                   let Icon = CheckCircle2;
 
                   if (verdict === "STRONG_HIRE") {
                     badgeStyles = "bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-500/40 ring-1 ring-emerald-500/30";
-                    label = "Strong Hire";
+                    label = "Placement Ready (Distinction)";
                     Icon = Award;
+                  } else if (verdict === "HIRE") {
+                    badgeStyles = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
+                    label = "Placement Ready";
+                    Icon = CheckCircle2;
                   } else if (verdict === "LEANING_NO") {
                     badgeStyles = "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
-                    label = "Leaning No";
+                    label = "Needs Practice";
                     Icon = AlertCircle;
-                  } else if (verdict === "NO_HIRE") {
-                    badgeStyles = "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30";
-                    label = "Do Not Hire";
-                    Icon = XCircle;
+                  } else if (verdict === "NO_HIRE" || verdict === "DO_NOT_HIRE") {
+                    badgeStyles = "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30";
+                    label = "Needs Improvement";
+                    Icon = Target;
+                  } else if (verdict === "INCOMPLETE") {
+                    badgeStyles = "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30";
+                    label = "Incomplete Session";
+                    Icon = AlertCircle;
                   }
 
                   return (
@@ -508,7 +539,7 @@ export function ReportClient({
                           &ldquo;{q.quote}&rdquo;
                         </p>
                         <p className="text-[11px] text-muted-foreground leading-relaxed">
-                          <strong>Recruiter Assessment:</strong> {q.analysis}
+                          <strong>Evaluator Feedback:</strong> {q.analysis}
                         </p>
                       </div>
                     ))}
@@ -737,6 +768,13 @@ export function ReportClient({
               </div>
             </div>
           )}
+
+          {/* Matched Jobs Section (Driven by Profile, Resume & Viva Score) */}
+          <MatchedJobsSection
+            interviewId={interview.id}
+            overallScore={report.overallScore}
+            targetRole={interview.jobRole?.title || interview.role || interview.problemTitle}
+          />
 
           {/* Final Submitted Code Implementation */}
           {interview.code && interview.code.trim().length > 0 && (

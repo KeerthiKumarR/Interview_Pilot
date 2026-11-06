@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { runFullAudit } from "@/lib/review/full-auditor";
-import { invalidateReviewCache } from "@/app/api/review/route";
+import { invalidateReviewCache } from "@/lib/review/cache";
 
 /**
  * Shared service to execute full candidate benchmark audit and persist review & readiness score.

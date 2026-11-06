@@ -11,6 +11,7 @@ import {
   buildDynamicToolInstructions,
 } from "@/types/skills";
 import { buildProfileInterviewDirective } from "@/lib/interview/profile-context";
+import { cleanInterviewChatText } from "@/lib/utils";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -99,6 +100,7 @@ export async function POST(req: Request, context: RouteContext) {
       currentQuestionTitle,
       currentQuestionPrompt,
       currentCategory,
+      spokenLanguage = "en-IN",
     } = body;
 
     if (!message || typeof message !== "string") {
@@ -215,6 +217,7 @@ export async function POST(req: Request, context: RouteContext) {
       currentQuestionTitle: typeof currentQuestionTitle === "string" ? currentQuestionTitle : undefined,
       currentQuestionPrompt: typeof currentQuestionPrompt === "string" ? currentQuestionPrompt : undefined,
       currentCategory: typeof currentCategory === "string" ? currentCategory : undefined,
+      spokenLanguage,
     });
 
     // Load candidate's career profile & projects to enable personalized interview questions (cached 60s)
@@ -235,16 +238,64 @@ export async function POST(req: Request, context: RouteContext) {
       profileSessionCache.set(interview.user.id, { profile: studentProfile, expiry: now + 60000 });
     }
 
+    let targetCompany = "";
+    let effectiveTargetRole = studentProfile?.targetRole || "Software Engineer";
+    let targetSkillsStr = interview.jobRole?.targetSkills || "";
+
+    if (interview.problemDescription) {
+      const roleMatch = interview.problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
+      if (roleMatch && roleMatch[1]?.trim()) effectiveTargetRole = roleMatch[1].trim();
+      const compMatch = interview.problemDescription.match(/\-\s*\*\*Target Company\*\*:\s*([^\n\r]+)/i);
+      if (compMatch && compMatch[1]?.trim()) targetCompany = compMatch[1].trim();
+      const stackMatch = interview.problemDescription.match(/\-\s*\*\*(?:Required Stack|Verified Tech Stack)\*\*:\s*([^\n\r]+)/i);
+      if (stackMatch && stackMatch[1]?.trim()) targetSkillsStr = stackMatch[1].trim();
+    }
+
+    if (interview.jobRole?.title) {
+      effectiveTargetRole = interview.jobRole.title;
+    }
+    if (interview.jobRole?.targetSkills) {
+      targetSkillsStr = interview.jobRole.targetSkills;
+    }
+
+    if (!targetCompany && interview.problemTitle) {
+      if (interview.problemTitle.includes("Technical Viva:")) {
+        const parts = interview.problemTitle.split("Technical Viva:");
+        targetCompany = parts[0]?.trim();
+        if (!effectiveTargetRole && parts[1]?.trim()) effectiveTargetRole = parts[1].trim();
+      } else if (interview.problemTitle.includes(":")) {
+        const parts = interview.problemTitle.split(":");
+        targetCompany = parts[0]?.trim();
+        if (!effectiveTargetRole && parts[1]?.trim()) effectiveTargetRole = parts[1].trim();
+      }
+    }
+
+    const jobSpecificDirective = `
+======================================================================
+ACTIVE INTERVIEW TARGET ROLE & COMPANY CONTEXT
+======================================================================
+TARGET ROLE: ${effectiveTargetRole}
+${targetCompany ? `TARGET COMPANY: ${targetCompany}` : ""}
+${targetSkillsStr ? `REQUIRED TECH STACK: ${targetSkillsStr}` : ""}
+
+CRITICAL INSTRUCTIONS:
+- You are assessing the candidate specifically for the role of "${effectiveTargetRole}"${targetCompany ? ` at ${targetCompany}` : ""}.
+- Do NOT assess them for generic roles; every technical question, architecture probe, and coding inquiry MUST evaluate their fitness for "${effectiveTargetRole}"${targetSkillsStr ? ` and the stack (${targetSkillsStr})` : ""}.
+- In Stage 2 (Architecture Defense), probe how their past project designs, database choices, and latency trade-offs prepare them for ${effectiveTargetRole}.
+- In Stage 3 (Technical Problem Solving), ask practical problem-solving questions directly relevant to ${effectiveTargetRole}.
+======================================================================
+`;
+
     const profileDirective = buildProfileInterviewDirective(studentProfile ? {
-      targetRole: studentProfile.targetRole,
+      targetRole: effectiveTargetRole,
       skills: Array.isArray(studentProfile.skills) ? (studentProfile.skills as string[]) : [],
       projects: studentProfile.projects,
       achievements: studentProfile.achievements,
     } : null);
 
     const systemPrompt = isDynamicMode
-      ? `${baseSystemPrompt}${dynamicInterviewerPrompt}${profileDirective}`
-      : `${baseSystemPrompt}${profileDirective}`;
+      ? `${baseSystemPrompt}${dynamicInterviewerPrompt}${jobSpecificDirective}${profileDirective}`
+      : `${baseSystemPrompt}${jobSpecificDirective}${profileDirective}`;
 
     // Build full user prompt combining message + editor code + execution result into a single payload
     // Wrap candidate input in prompt-injection resistant delimiters
@@ -304,12 +355,8 @@ export async function POST(req: Request, context: RouteContext) {
         maxTokens: 2560,
         onComplete: async (result) => {
           try {
-            // Clean tool call markup and internal stage tags for persistent chat transcript
-            const cleanContent = result.content
-              .replace(/\[TOOL_CALL:[\s\S]*?\]/gi, "")
-              .replace(/\[STAGE:\s*[1-4]\]/gi, "")
-              .replace(/\[SWITCH_CATEGORY:.*?\]/gi, "")
-              .trim();
+            // Clean internal reasoning, tokens, credits chatter, and control tags for persistent chat transcript
+            const cleanContent = cleanInterviewChatText(result.content);
 
             await prisma.message.create({
               data: {
