@@ -495,7 +495,7 @@ export function speak(
     const isMale = options?.gender === "male";
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = options?.rate ?? 1.0;
-    utterance.pitch = options?.pitch ?? (isMale ? 0.92 : 1.05);
+    utterance.pitch = options?.pitch ?? 1.0;
     // Auto-detect language from script if text is in Hindi/Devanagari or regional Indic script
     let effectiveLang = options?.lang || "en-IN";
     if (/[\u0900-\u097F]/.test(text)) effectiveLang = "hi-IN";

@@ -19,7 +19,9 @@ export async function POST(
     const requestedLanguage = (formData.get("language") as string) || "en-IN";
 
     // 1. Primary: Gnani.ai Prisma ASR (Native Multilingual Indian Accents & Code-Mixing)
-    const gnaniApiKey = process.env.GNANI_API_KEY;
+    const gnaniApiKey =
+      process.env.GNANI_API_KEY ||
+      "vach_1ytE2CY5X2Edy1pc4uNuBVf32FOiLCnlKp8ZRsz3d5r6dPCnbvUBLf8eQaZOgYPiutccooaM7QQOZDyKhtfWFIBL7yjrcJBw_76f696755031bb77518b1443b9744ecc";
     if (gnaniApiKey) {
       try {
         const gnaniFormData = new FormData();

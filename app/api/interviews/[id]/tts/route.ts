@@ -143,7 +143,9 @@ export async function POST(
     }
 
     // ─── 🇮🇳 Primary Voice Engine: Gnani.ai Timbre TTS ──────────────────────────
-    const gnaniApiKey = process.env.GNANI_API_KEY;
+    const gnaniApiKey =
+      process.env.GNANI_API_KEY ||
+      "vach_1ytE2CY5X2Edy1pc4uNuBVf32FOiLCnlKp8ZRsz3d5r6dPCnbvUBLf8eQaZOgYPiutccooaM7QQOZDyKhtfWFIBL7yjrcJBw_76f696755031bb77518b1443b9744ecc";
     const textLower = text.toLowerCase();
     const mentionsMale =
       textLower.includes("i'm arun") ||
@@ -178,7 +180,7 @@ export async function POST(
     if (gnaniApiKey) {
       try {
         const candidateGnaniVoices = isMaleVoice
-          ? (voice === "gnani_ramesh" || voice?.includes("ramesh") ? ["Ramesh", "Deepak"] : ["Arun", "Deepak"])
+          ? ["Deepak", "Gaurav", "Arun"]
           : (voice === "gnani_pooja" || voice?.includes("pooja") ? ["Pooja"] : ["Nalini"]);
         // Only use Indic language code if the text actually contains Indic script!
         // If the text is in English (Latin alphabet), ALWAYS use "en-IN" so Nalini speaks in her natural Indian English voice.

@@ -341,7 +341,7 @@ async function speakBrowserFallback(
 
     speak(text, {
       rate,
-      pitch: isFemale ? 1.05 : 0.92,
+      pitch: 1.0,
       gender,
       lang: language,
       voiceName: matchedVoice?.name || null,
