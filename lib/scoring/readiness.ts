@@ -321,7 +321,7 @@ export function calculateReadinessMetrics(
 
   let summary = "";
   if (tier === "Placement ready") {
-    summary = `Excellent profile (${weightedTotal}/100). You meet benchmark standards across resume, live deployments, and technical skills. You are qualified to apply directly to MSOT and partner openings.`;
+    summary = `Excellent profile (${weightedTotal}/100). You meet benchmark standards across resume, live deployments, and technical skills. You are qualified to apply directly to top campus and partner openings.`;
   } else if (tier === "Almost ready") {
     summary = `Solid progress (${weightedTotal}/100). Completing the top recommendations below will push your placement readiness score over the 75-point benchmark.`;
   } else {
