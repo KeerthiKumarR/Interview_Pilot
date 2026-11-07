@@ -11,6 +11,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/tts/settings(.*)",
   "/api/profile/upload-resume(.*)",
   "/report/(.*)",
+  "/api/interviews/(.*)/tts(.*)",
+  "/api/interviews/(.*)/stt(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

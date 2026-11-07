@@ -187,7 +187,7 @@ export async function POST(
         const hasIndicScript = /[\u0900-\u0D7F]/.test(text);
         let targetLang = "en-IN";
         if (hasIndicScript) {
-          if (/[\u0900-\u097F]/.test(text)) targetLang = "hi-IN";
+          if (/[\u0900-\u097F]/.test(text)) targetLang = language?.startsWith("mr") ? "mr-IN" : "hi-IN";
           else if (/[\u0C80-\u0CFF]/.test(text)) targetLang = "kn-IN";
           else if (/[\u0B80-\u0BFF]/.test(text)) targetLang = "ta-IN";
           else if (/[\u0C00-\u0C7F]/.test(text)) targetLang = "te-IN";

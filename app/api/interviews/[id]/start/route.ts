@@ -237,6 +237,12 @@ CRITICAL INSTRUCTIONS:
 
     const isHindi = spokenLanguage.startsWith("hi");
     const isKannada = spokenLanguage.startsWith("kn");
+    const isTamil = spokenLanguage.startsWith("ta");
+    const isTelugu = spokenLanguage.startsWith("te");
+    const isMarathi = spokenLanguage.startsWith("mr");
+    const isBengali = spokenLanguage.startsWith("bn");
+    const isGujarati = spokenLanguage.startsWith("gu");
+    const isMalayalam = spokenLanguage.startsWith("ml");
 
     let openingPrompt = "";
     if (isHindi) {
@@ -251,11 +257,53 @@ CRITICAL INSTRUCTIONS:
         openingPrompt += ` उम्मीदवार का टेक्निकल इंटरव्यू में स्वागत करें और उनसे अपना परिचय देने का अनुरोध करें। 2-3 वाक्यों में संक्षिप्त रखें।`;
       }
     } else if (isKannada) {
-      openingPrompt = `ಅಭ್ಯರ್ಥಿಯು ಇಂಟರ್ವ್ಯೂ ರೂಮ್‌ಗೆ ಸೇರಿದ್ದಾರೆ. ನೀವು ಕನ್ನಡದಲ್ಲಿ ಮಾತನಾಡಬೇಕು. ನಿಮ್ಮ ಹೆಸರು ${interviewerName} ಎಂದು ಪರಿಚಯಿಸಿಕೊಳ್ಳಿ.`;
+      openingPrompt = `ಅಭ್ಯರ್ಥಿಯು ಇಂಟರ್ವ್ಯೂ ರೂಮ್‌ಗೆ ಸೇರಿದ್ದಾರೆ. ನೀವು ಕನ್ನಡದಲ್ಲಿ ಮಾತನಾಡಬೇಕು (ಕನ್ನಡ ಲಿಪಿ ಬಳಸಿ). ನಿಮ್ಮ ಹೆಸರು ${interviewerName} ಎಂದು ಪರಿಚಯಿಸಿಕೊಳ್ಳಿ.`;
       if (targetCompany) {
         openingPrompt += ` ${targetCompany} ಕಂಪನಿಯ ${targetRole} ಹುದ್ದೆಯ ತಾಂತ್ರಿಕ ಸಂದರ್ಶನಕ್ಕೆ ಸ್ವಾಗತಿಸಿ. 2-3 ವಾಕ್ಯಗಳಲ್ಲಿ ಸ್ವಾಗತಿಸಿ ಮತ್ತು ತಮ್ಮ ಪರಿಚಯ ನೀಡಲು ಕೇಳಿ.`;
       } else {
         openingPrompt += ` 2-3 ವಾಕ್ಯಗಳಲ್ಲಿ ಸ್ವಾಗತಿಸಿ ಮತ್ತು ತಮ್ಮ ಪರಿಚಯ ನೀಡಲು ಕೇಳಿ.`;
+      }
+    } else if (isTamil) {
+      openingPrompt = `நேர்காணல் அறைக்கு வந்துள்ள வேட்பாளரை வரவேற்கவும். நீங்கள் உரையாடலை முழுமையாக தமிழ் மொழியில் (தமிழ் எழுத்துகளில்) நடத்த வேண்டும். உங்கள் பெயர் ${interviewerName} என்று அறிமுகம் செய்து கொள்ளவும்.`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany} நிறுவனத்தின் ${targetRole} பணிக்கான தொழில்நுட்ப நேர்காணலுக்கு வரவேற்கவும். நிலை 1-ஐ தொடங்க அவர்களின் அறிமுகத்தை சுருக்கமாக கேட்கவும்.`;
+      } else {
+        openingPrompt += ` 2-3 வாக்கியங்களில் வரவேற்று அவர்களை அறிமுகப்படுத்திக் கொள்ள கேட்கவும்.`;
+      }
+    } else if (isTelugu) {
+      openingPrompt = `అభ్యర్థి ఇంటర్వ్యూ రూమ్‌లో చేరారు. మీరు సంభాషణను పూర్తిగా తెలుగులో (తెలుగు లిపిలో) నిర్వహించాలి. మీ పేరు ${interviewerName} అని పరిచయం చేసుకోండి.`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany} కంపెనీలో ${targetRole} పోస్ట్ కోసం సాంకేతిక ఇంటర్వ్యూకు స్వాగతం పలకండి. దశ 1ని ప్రారంభించడానికి వారి పరిచయాన్ని అడగండి.`;
+      } else {
+        openingPrompt += ` 2-3 వాక్యాలలో స్వాగతించి తమను పరిచయం చేసుకోవాలని కోరండి.`;
+      }
+    } else if (isMarathi) {
+      openingPrompt = `उमेदवार मुलाखत कक्षात उपस्थित झाले आहेत. तुम्हाला संपूर्ण संवाद मराठीत (देवनागरी लिपीत) करायचा आहे. स्वतःची ओळख ${interviewerName} म्हणून द्या.`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany} मधील ${targetRole} पदासाठी तांत्रिक मुलाखतीत त्यांचे स्वागत करा. टप्पा 1 सुरू करण्यासाठी त्यांची थोडक्यात ओळख विचारून घ्या.`;
+      } else {
+        openingPrompt += ` 2-3 वाक्यांत स्वागत करा आणि स्वतःची ओळख देण्यास सांगा.`;
+      }
+    } else if (isBengali) {
+      openingPrompt = `প্রার্থী ইন্টারভিউ রুমে যোগ দিয়েছেন। আপনাকে সম্পূর্ণ কথোপকথন বাংলায় (বাংলা লিপিতে) পরিচালনা করতে হবে। আপনার নাম ${interviewerName} হিসেবে পরিচয় দিন।`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany}-এ ${targetRole} পদের প্রযুক্তিগত সাক্ষাৎকারে তাদের স্বাগত জানান। প্রথম পর্যায় শুরু করতে তাদের সংক্ষিপ্ত পরিচয় দিতে বলুন।`;
+      } else {
+        openingPrompt += ` 2-3টি বাক্যে স্বাগত জানান এবং নিজের পরিচয় দিতে অনুরোধ করুন।`;
+      }
+    } else if (isGujarati) {
+      openingPrompt = `ઉમેદવાર ઇન્ટરવ્યુ રૂમમાં જોડાયા છે. તમારે વાતચીત સંપૂર્ણપણે ગુજરાતીમાં (ગુજરાતી લિપિમાં) કરવાની રહેશે. તમારી ઓળખ ${interviewerName} તરીકે આપો.`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany} માં ${targetRole} હોદ્દા માટે ટેકનિકલ ઇન્ટરવ્યુમાં તેમનું સ્વાગત કરો. તબક્કો 1 શરૂ કરવા માટે તેમનો ટૂંકો પરિચય પૂછો.`;
+      } else {
+        openingPrompt += ` 2-3 વાક્યોમાં સ્વાગત કરો અને પરિચય આપવા કહો.`;
+      }
+    } else if (isMalayalam) {
+      openingPrompt = `ഉദ്യോഗാർത്ഥി അഭിമുഖ മുറിയിൽ ചേർന്നു. നിങ്ങൾ സംഭാഷണം പൂർണ്ണമായും മലയാളത്തിൽ (മലയാള ലിപിയിൽ) നടത്തണം. നിങ്ങളുടെ പേര് ${interviewerName} എന്ന് പരിചയപ്പെടുത്തുക.`;
+      if (targetCompany) {
+        openingPrompt += ` ${targetCompany}-ലെ ${targetRole} തസ്തികയിലേക്കുള്ള സാങ്കേതിക അഭിമുഖത്തിലേക്ക് സ്വാഗതം ചെയ്യുക. ഘട്ടം 1 ആരംഭിക്കാൻ അവരുടെ ലഘുവായ ആമുഖം ചോദിക്കുക.`;
+      } else {
+        openingPrompt += ` 2-3 വാക്യങ്ങളിൽ സ്വാഗതം ചെയ്ത് സ്വയം പരിചയപ്പെടുത്താൻ ആവശ്യപ്പെടുക.`;
       }
     } else {
       openingPrompt = `The candidate has just joined the interview room. Introduce yourself warmly as ${interviewerName}, their senior technical interviewer for this placement viva.`;
@@ -302,6 +350,18 @@ CRITICAL INSTRUCTIONS:
           openingMessage = `नमस्ते! मैं ${interviewerName} हूँ, और आज मैं ${targetCompany} में ${targetRole} पद के लिए आपका प्लेसमेंट वायवा इंटरव्यू लूँगी। स्टेज 1 शुरू करने के लिए, कृपया अपना परिचय दें और बताएं कि आप इस भूमिका के लिए क्यों उत्साहित हैं।`;
         } else if (isKannada) {
           openingMessage = `ನಮಸ್ಕಾರ! ನಾನು ${interviewerName}, ಮತ್ತು ಇಂದು ${targetCompany} ಕಂಪನಿಯ ${targetRole} ಹುದ್ದೆಗೆ ನಿಮ್ಮ ಸಂದರ್ಶನ ನಡೆಸಲಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ.`;
+        } else if (isTamil) {
+          openingMessage = `வணக்கம்! நான் ${interviewerName}, இன்று ${targetCompany} நிறுவனத்தின் ${targetRole} பணிக்கான நேர்காணலை நடத்த உள்ளேன். நிலை 1-ஐ தொடங்க, தயவுசெய்து உங்களை அறிமுகப்படுத்துங்கள்.`;
+        } else if (isTelugu) {
+          openingMessage = `నమస్కారం! నేను ${interviewerName}, ఈ రోజు ${targetCompany} కంపెనీలో ${targetRole} పోస్ట్ కోసం మీ ఇంటర్వ్యూ నిర్వహించబోతున్నాను. మొదటి దశను ప్రారంభించడానికి, దయచేసి మీ పరిచయం ఇవ్వండి.`;
+        } else if (isMarathi) {
+          openingMessage = `नमस्कार! मी ${interviewerName}, आज मी ${targetCompany} मधील ${targetRole} पदासाठी तुमची मुलाखत घेणार आहे. स्टेज 1 सुरू करण्यासाठी, कृपया तुमची ओळख करून द्या.`;
+        } else if (isBengali) {
+          openingMessage = `নমস্কার! আমি ${interviewerName}, আজ আমি ${targetCompany}-এ ${targetRole} পদের জন্য আপনার সাক্ষাৎকার গ্রহণ করব। প্রথম পর্যায় শুরু করতে, দয়া করে আপনার পরিচয় দিন।`;
+        } else if (isGujarati) {
+          openingMessage = `નમસ્તે! હું ${interviewerName} છું, અને આજે હું ${targetCompany} માં ${targetRole} માટે તમારો ઇન્ટરવ્યુ લઈશ. તબક્કો 1 શરૂ કરવા માટે, કૃપા કરીને તમારો પરિચય આપો.`;
+        } else if (isMalayalam) {
+          openingMessage = `നമസ്കാരം! ഞാൻ ${interviewerName}, ഇന്ന് ${targetCompany}-ലെ ${targetRole} തസ്തികയിലേക്കുള്ള അഭിമുഖം നടത്തുന്നു. ഘട്ടം 1 ആരംഭിക്കാൻ, ദയവായി സ്വയം പരിചയപ്പെടുത്തുക.`;
         } else {
           openingMessage = `Hi! I'm ${interviewerName}, and I'll be conducting your technical viva for the ${targetRole} position at ${targetCompany} today. To kick things off with Stage 1, please introduce yourself and tell me what excites you about this role.`;
         }
@@ -315,6 +375,18 @@ CRITICAL INSTRUCTIONS:
           openingMessage = `नमस्ते! मैं ${interviewerName} हूँ, और आज मैं आपका ${role} प्लेसमेंट वायवा इंटरव्यू लूँगी। मैंने आपकी प्रोफाइल और आपके मुख्य प्रोजेक्ट "${firstProject || "प्रोजेक्ट"}" को देखा है। स्टेज 1 शुरू करने के लिए, कृपया अपना परिचय दें और सॉफ्टवेयर इंजीनियरिंग में अपनी यात्रा के बारे में संक्षेप में बताएं।`;
         } else if (isKannada) {
           openingMessage = `ನಮಸ್ಕಾರ! ನಾನು ${interviewerName}, ಮತ್ತು ಇಂದು ನಾನು ನಿಮ್ಮ ${role} ಪ್ಲೇಸ್‌ಮೆಂಟ್ ವೈವಾ ಇಂಟರ್ವ್ಯೂ ನಡೆಸಲಿದ್ದೇನೆ. ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಮತ್ತು ಪ್ರಾಜೆಕ್ಟ್ ಅನ್ನು ಪರಿಶೀಲಿಸಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ ಮತ್ತು ನಿಮ್ಮ ತಾಂತ್ರಿಕ ಪ್ರಯಾಣದ ಬಗ್ಗೆ ತಿಳಿಸಿ.`;
+        } else if (isTamil) {
+          openingMessage = `வணக்கம்! நான் ${interviewerName}, இன்று உங்கள் ${role} பிளேஸ்மென்ட் வைவா நேர்காணலை நடத்த உள்ளேன். உங்கள் விவரக்குறிப்பு மற்றும் திட்டங்களை மதிப்பாய்வு செய்துள்ளேன். நிலை 1-ஐ தொடங்க, தயவுசெய்து உங்களை அறிமுகப்படுத்துங்கள்.`;
+        } else if (isTelugu) {
+          openingMessage = `నమస్కారం! నేను ${interviewerName}, ఈ రోజు మీ ${role} ప్లేస్‌మెంట్ వైవా ఇంటర్వ్యూ నిర్వహించబోతున్నాను. మీ ప్రొఫైల్ మరియు ప్రాజెక్ట్‌లను పరిశీలించాను. మొదటి దశను ప్రారంభించడానికి, దయచేసి మిమ్మల్ని పరిచయం చేసుకోండి.`;
+        } else if (isMarathi) {
+          openingMessage = `नमस्कार! मी ${interviewerName}, आज मी तुमची ${role} प्लेसमेंट व्हायव्हा मुलाखत घेणार आहे. मी तुमचे प्रोफाइल आणि प्रकल्प तपासले आहेत. स्टेज 1 सुरू करण्यासाठी, कृपया तुमची ओळख करून द्या.`;
+        } else if (isBengali) {
+          openingMessage = `নমস্কার! আমি ${interviewerName}, আজ আমি আপনার ${role} প্লেসমেন্ট ভাইভা সাক্ষাৎকার গ্রহণ করব। আমি আপনার প্রোফাইল এবং প্রকল্পগুলি পর্যালোচনা করেছি। প্রথম পর্যায় শুরু করতে, দয়া করে আপনার পরিচয় দিন।`;
+        } else if (isGujarati) {
+          openingMessage = `નમસ્તે! હું ${interviewerName} છું, અને આજે હું તમારો ${role} પ્લેસમેન્ટ વાઇવા ઇન્ટરવ્યુ લઈશ. મેં તમારી પ્રોફાઇલ અને પ્રોજેક્ટ્સની સમીક્ષા કરી છે. તબક્કો 1 શરૂ કરવા માટે, કૃપા કરીને તમારો પરિચય આપો.`;
+        } else if (isMalayalam) {
+          openingMessage = `നമസ്കാരം! ഞാൻ ${interviewerName}, ഇന്ന് നിങ്ങളുടെ ${role} പ്ലേസ്‌മെന്റ് വൈവ ഇന്റർവ്യൂ നടത്താൻ പോകുന്നു. നിങ്ങളുടെ പ്രൊഫൈലും പ്രോജക്റ്റുകളും ഞാൻ അവലോകനം ചെയ്തു. സ്റ്റേജ് 1 ആരംഭിക്കാൻ, ദയവായി സ്വയം പരിചയപ്പെടുത്തുക.`;
         } else {
           const skillsPhrase = topSkills ? ` in ${topSkills}` : "";
           const projectPhrase = firstProject ? ` and your featured project, ${firstProject}` : "";
@@ -325,6 +397,18 @@ CRITICAL INSTRUCTIONS:
           openingMessage = `नमस्ते, मैं ${interviewerName} हूँ, और आज आपका टेक्निकल इंटरव्यू लूँगी। हमारे पास इस सेशन के लिए ${interview.duration} मिनट हैं। जब आप तैयार हों, कृपया अपना संक्षिप्त परिचय दें।`;
         } else if (isKannada) {
           openingMessage = `ನಮಸ್ಕಾರ, ನಾನು ${interviewerName}, ಮತ್ತು ಇಂದು ನಿಮ್ಮ ತಾಂತ್ರಿಕ ಸಂದರ್ಶನವನ್ನು ನಡೆಸಲಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ಹಂಚಿಕೊಳ್ಳಿ.`;
+        } else if (isTamil) {
+          openingMessage = `வணக்கம், நான் ${interviewerName}, இன்று உங்கள் தொழில்நுட்ப நேர்காணலை நடத்த உள்ளேன். நீங்கள் தயாராக இருக்கும் போது, தயவுசெய்து உங்கள் அறிமுகத்தை கூறுங்கள்.`;
+        } else if (isTelugu) {
+          openingMessage = `నమస్కారం, నేను ${interviewerName}, ఈ రోజు మీ సాంకేతిక ఇంటర్వ్యూ నిర్వహించబోతున్నాను. మీరు సిద్ధంగా ఉన్నప్పుడు, దయచేసి మీ పరిచయాన్ని పంచుకోండి.`;
+        } else if (isMarathi) {
+          openingMessage = `नमस्कार, मी ${interviewerName}, आज तुमची तांत्रिक मुलाखत घेणार आहे. तुम्ही तयार असाल तेव्हा, कृपया तुमची ओळख करून द्या.`;
+        } else if (isBengali) {
+          openingMessage = `নমস্কার, আমি ${interviewerName}, আজ আপনার প্রযুক্তিগত সাক্ষাৎকার গ্রহণ করব। আপনি প্রস্তুত হলে, দয়া করে আপনার সংক্ষিপ্ত পরিচয় দিন।`;
+        } else if (isGujarati) {
+          openingMessage = `નમસ્તે, હું ${interviewerName} છું, અને આજે તમારો ટેકનિકલ ઇન્ટરવ્યુ લઈશ. જ્યારે તમે તૈયાર હોવ, ત્યારે કૃપા કરીને તમારો પરિચય આપો.`;
+        } else if (isMalayalam) {
+          openingMessage = `നമസ്കാരം, ഞാൻ ${interviewerName}, ഇന്ന് നിങ്ങളുടെ സാങ്കേതിക അഭിമുഖം നടത്തുന്നു. നിങ്ങൾ തയ്യാറാകുമ്പോൾ, ദയവായി നിങ്ങളുടെ ആമുഖം പങ്കിടുക.`;
         } else {
           const skillNote = studentProfile?.skills && (studentProfile.skills as string[]).length > 0
             ? ` with your background in ${(studentProfile.skills as string[]).slice(0, 2).join(" & ")}`

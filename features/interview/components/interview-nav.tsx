@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { Timer } from "./timer";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { MiraiLogo } from "@/components/mirai-logo";
+import { InterviewPilotLogo } from "@/components/interview-pilot-logo";
 
 const LANGUAGE_LABELS: Record<string, string> = {
   javascript: "JavaScript",
@@ -34,7 +34,7 @@ export function InterviewNav() {
     <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
       {/* Left: Logo */}
       <Link href="/dashboard" className="flex items-center gap-2">
-        <MiraiLogo size={24} showText={true} textClassName="text-sm font-semibold tracking-tight text-foreground" />
+        <InterviewPilotLogo size={24} showText={true} textClassName="text-sm font-semibold tracking-tight text-foreground" />
       </Link>
 
       {/* Center: Problem info + Category Badge + Timer */}

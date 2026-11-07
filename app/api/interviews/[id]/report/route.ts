@@ -30,18 +30,12 @@ export async function POST(req: Request, context: RouteContext) {
 
     const user = await prisma.user.findUnique({
       where: { clerkId },
-      include: {
-        studentProfile: {
-          include: { readinessScore: true },
-        },
-      },
+      select: { id: true },
     });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
-
-    const studentProfile = user.studentProfile;
 
     const interview = await prisma.interview.findUnique({
       where: { id, userId: user.id },
@@ -198,29 +192,10 @@ export async function POST(req: Request, context: RouteContext) {
       const evaluatorSkillName = customDbSkill?.name || defaultEvaluatorSkill.name;
       const evaluatorSkillFocus = customDbSkill?.badge || defaultEvaluatorSkill.verdictFocus;
 
-      let targetRole = interview.jobRole?.title || "";
-      if (interview.problemDescription) {
-        const roleMatch = interview.problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
-        if (roleMatch && roleMatch[1]?.trim()) targetRole = roleMatch[1].trim();
-      }
-      if (!targetRole && interview.problemTitle) {
-        if (interview.problemTitle.includes("Technical Viva:")) {
-          const parts = interview.problemTitle.split("Technical Viva:");
-          if (parts[1]?.trim()) targetRole = parts[1].trim();
-        }
-      }
-      if (!targetRole) {
-        targetRole = studentProfile?.targetRole || "Software Engineer";
-      }
-
-      let targetSkills = interview.jobRole?.targetSkills || "";
-      if (!targetSkills && interview.problemDescription) {
-        const stackMatch = interview.problemDescription.match(/\-\s*\*\*(?:Required Stack|Verified Tech Stack)\*\*:\s*([^\n\r]+)/i);
-        if (stackMatch && stackMatch[1]?.trim()) targetSkills = stackMatch[1].trim();
-      }
-      if (!targetSkills) {
-        targetSkills = targetSkillsSetting?.value || "System Architecture, Big-O Complexity, Code Modularity, Ambition & Ownership";
-      }
+      const targetSkills =
+        interview.jobRole?.targetSkills ||
+        targetSkillsSetting?.value ||
+        "System Architecture, Big-O Complexity, Code Modularity, Ambition & Ownership";
 
       const recruiterNotesContext =
         recruiterLogs.length > 0
@@ -235,7 +210,7 @@ export async function POST(req: Request, context: RouteContext) {
       dynamicSystemPrompt = `You are an expert technical interviewer and executive evaluation system.
 ${evaluationPhilosophy}
 
-CRITICAL: In addition to standard scoring, you MUST generate an Executive Recruiter Card and Candidate Roadmap specifically evaluated for the role of "${targetRole}".
+CRITICAL: In addition to standard scoring, you MUST generate an Executive Recruiter Card and Candidate Roadmap.
 
 OUTPUT FORMAT (respond ONLY with valid JSON, no markdown formatting, no code blocks):
 {
@@ -247,8 +222,8 @@ OUTPUT FORMAT (respond ONLY with valid JSON, no markdown formatting, no code blo
   "codeQualityScore": <0-100>,
   "recruiterVerdict": "STRONG_HIRE" | "HIRE" | "LEANING_NO" | "NO_HIRE",
   "recruiterNotes": {
-    "executiveSummary": "2-3 sentence technical readiness summary for the student and mentor evaluated against ${targetRole} requirements (constructive, highlighting key strengths and immediate focus areas)",
-    "hiringRecommendation": "Constructive leveling & placement recommendation, highlighting readiness status for ${targetRole} and specific advice to achieve target role",
+    "executiveSummary": "2-3 sentence technical readiness summary for the student and mentor (constructive, highlighting key strengths and immediate focus areas)",
+    "hiringRecommendation": "Constructive leveling & placement recommendation, highlighting readiness status and specific advice to achieve target role",
     "keyQuotes": [
       {
         "topic": "Career Ambition & Vision",
@@ -286,7 +261,7 @@ OUTPUT FORMAT (respond ONLY with valid JSON, no markdown formatting, no code blo
   "strengths": ["strength 1", "strength 2", "strength 3"],
   "weaknesses": ["weakness 1", "weakness 2"],
   "suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"],
-  "summary": "2-3 sentence overall summary of the candidate's performance evaluated for ${targetRole}",
+  "summary": "2-3 sentence overall summary of the candidate's performance",
   "nextSteps": ["Actionable recommendation 1", "Actionable recommendation 2"],
   "transcriptAnnotations": [],
   "timeComplexity": "e.g., O(N)",
@@ -297,7 +272,6 @@ OUTPUT FORMAT (respond ONLY with valid JSON, no markdown formatting, no code blo
 
       dynamicEvaluationUserContext = `
 EVALUATION LENS: ${evaluatorSkillName} (${evaluatorSkillFocus})
-EVALUATED ROLE: ${targetRole}
 SESSION TARGET SKILLS: ${targetSkills}
 
 LOGGED RECRUITER OBSERVATIONS FROM LIVE SESSION:

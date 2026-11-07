@@ -143,23 +143,21 @@ export function InterviewList({
               key={interview.id}
               href={targetHref}
               onClick={() => handleCardClick(interview.id, targetHref)}
-              className={`group flex items-center justify-between rounded-2xl border-2 border-border bg-card px-5 py-4 neo-shadow-sm transition-all ${
+              className={`group flex items-center justify-between rounded-lg border border-border px-4 py-3 transition-all ${
                 isCardLoading
-                  ? "bg-secondary/90 ring-2 ring-primary shadow-xs cursor-wait"
-                  : "hover:translate-x-0.5 hover:-translate-y-0.5 hover:border-foreground/40 cursor-pointer"
+                  ? "bg-secondary/90 ring-1 ring-primary/50 shadow-xs cursor-wait"
+                  : "hover:bg-secondary/50 cursor-pointer"
               }`}
             >
               {/* Left: Problem info */}
-              <div className="flex flex-col gap-1 min-w-0 pr-3">
-                <span className="text-sm font-black text-foreground group-hover:text-primary transition-colors truncate">
+              <div className="flex flex-col gap-0.5 min-w-0 pr-3">
+                <span className="text-sm font-medium text-foreground group-hover:text-foreground/90 truncate">
                   {interview.problemTitle}
                 </span>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap font-medium">
-                  <span className="rounded-md border border-border bg-secondary/80 px-2 py-0.5 text-[11px] font-bold text-foreground">
-                    {LANGUAGE_LABELS[interview.language] ?? interview.language}
-                  </span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                  <span>{LANGUAGE_LABELS[interview.language] ?? interview.language}</span>
                   <span className="text-muted-foreground/40">·</span>
-                  <span className={`text-xs ${DIFFICULTY_STYLES[interview.difficulty] ?? ""}`}>
+                  <span className={DIFFICULTY_STYLES[interview.difficulty] ?? ""}>
                     {interview.difficulty.charAt(0).toUpperCase() + interview.difficulty.slice(1)}
                   </span>
                   <span className="text-muted-foreground/40">·</span>
@@ -170,22 +168,22 @@ export function InterviewList({
               {/* Right: Score or status + date or loading spinner */}
               <div className="flex items-center gap-3 shrink-0">
                 {isCardLoading ? (
-                  <div className="flex items-center gap-2 text-xs font-black text-primary">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-primary">
                     <Loader2 className="w-4 h-4 animate-spin shrink-0 text-primary" />
                     <span className="hidden sm:inline">Opening...</span>
                   </div>
                 ) : (
                   <>
                     {interview.report ? (
-                      <span className={`text-sm font-black px-2.5 py-1 rounded-xl border border-border bg-secondary/60 ${getScoreColor(interview.report.overallScore)}`}>
+                      <span className={`text-sm font-semibold ${getScoreColor(interview.report.overallScore)}`}>
                         {interview.report.overallScore}/100
                       </span>
                     ) : (
-                      <span className="rounded-xl border border-border bg-secondary px-2.5 py-1 text-xs font-bold text-muted-foreground">
+                      <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs text-muted-foreground">
                         {interview.status === "in_progress" ? "In Progress" : interview.status}
                       </span>
                     )}
-                    <span className="text-xs font-bold text-muted-foreground/60 hidden sm:inline">
+                    <span className="text-xs text-muted-foreground/60 hidden sm:inline">
                       {formatRelativeTime(createdIso)}
                     </span>
                   </>

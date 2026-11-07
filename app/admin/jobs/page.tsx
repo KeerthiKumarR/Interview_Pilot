@@ -69,16 +69,16 @@ export default function AdminJobsPage() {
   // New Job Form State
   const [formData, setFormData] = useState({
     title: "",
-    company: "MSOT Placement Cell",
+    company: "",
     description: "",
-    location: "Bangalore (Hybrid)",
+    location: "Bengaluru (Hybrid)",
     isRemote: true,
-    jobType: "internship",
+    jobType: "full-time",
     applyUrl: "",
     requiredSkills: "React, Next.js, TypeScript, PostgreSQL",
     minReadinessScore: 65,
     isMSOTInternal: true,
-    stipendOrSalary: "₹35,000 / month",
+    stipendOrSalary: "₹12-18 LPA",
   });
 
   const toggleExpand = (jobId: string) => {
@@ -112,16 +112,16 @@ export default function AdminJobsPage() {
       setShowCreateModal(false);
       setFormData({
         title: "",
-        company: "MSOT Placement Cell",
+        company: "",
         description: "",
-        location: "Bangalore (Hybrid)",
+        location: "Bengaluru (Hybrid)",
         isRemote: true,
-        jobType: "internship",
+        jobType: "full-time",
         applyUrl: "",
         requiredSkills: "React, Next.js, TypeScript, PostgreSQL",
         minReadinessScore: 65,
         isMSOTInternal: true,
-        stipendOrSalary: "₹35,000 / month",
+        stipendOrSalary: "₹12-18 LPA",
       });
       // Invalidate both admin and student caches so both reflect immediately
       invalidateCache("/api/admin/jobs");
@@ -155,14 +155,14 @@ export default function AdminJobsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <GraduationCap className="h-4 w-4" />
+                  <Building2 className="h-4 w-4" />
                 </div>
                 <h1 className="text-xl font-bold tracking-tight">
-                  MSOT Campus Drives & Job Management
+                  Job Postings & Careers
                 </h1>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Post exclusive campus placement drives, monitor candidate applications, and evaluate applicants sorted by readiness score.
+                Publish verified job openings, monitor candidate applications, and evaluate applicants sorted by readiness score.
               </p>
             </div>
 
@@ -172,7 +172,7 @@ export default function AdminJobsPage() {
               className="gap-1.5 self-start sm:self-auto"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Post Campus Drive</span>
+              <span>Post Job Opening</span>
             </Button>
           </div>
 
@@ -182,14 +182,14 @@ export default function AdminJobsPage() {
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Filter drives by title, company, skills..."
+                placeholder="Filter jobs by title, company, skills..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-md border border-border bg-card pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary"
               />
             </div>
             <div className="text-xs text-muted-foreground font-mono">
-              Total Active Drives: {jobs.length}
+              Total Active Postings: {jobs.length}
             </div>
           </div>
 
@@ -206,9 +206,9 @@ export default function AdminJobsPage() {
           ) : filteredJobs.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-12 text-center space-y-2">
               <Briefcase className="h-8 w-8 mx-auto text-muted-foreground" />
-              <h3 className="text-sm font-semibold">No job drives found</h3>
+              <h3 className="text-sm font-semibold">No job postings found</h3>
               <p className="text-xs text-muted-foreground">
-                Click &quot;Post Campus Drive&quot; to publish your first hiring listing.
+                Click &quot;Post Job Opening&quot; to publish your first hiring listing.
               </p>
             </div>
           ) : (
@@ -231,7 +231,7 @@ export default function AdminJobsPage() {
                             {job.isMSOTInternal && (
                               <span className="text-[11px] font-medium text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full flex items-center gap-1">
                                 <GraduationCap className="h-3 w-3" />
-                                Exclusive MSOT Drive
+                                Exclusive Campus Drive
                               </span>
                             )}
                             {job.stipendOrSalary && (
@@ -480,7 +480,7 @@ export default function AdminJobsPage() {
                 <input
                   type="url"
                   required
-                  placeholder="https://msot.ac.in/careers or drive form"
+                  placeholder="https://company.com/careers or drive form"
                   value={formData.applyUrl}
                   onChange={(e) => setFormData({ ...formData, applyUrl: e.target.value })}
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-primary"
@@ -502,13 +502,13 @@ export default function AdminJobsPage() {
               <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
-                  id="isMSOT"
+                  id="isCampusDrive"
                   checked={formData.isMSOTInternal}
                   onChange={(e) => setFormData({ ...formData, isMSOTInternal: e.target.checked })}
                   className="rounded border-border text-primary"
                 />
-                <label htmlFor="isMSOT" className="text-xs text-foreground cursor-pointer font-medium">
-                  Mark as Exclusive MSOT Campus Drive (pinned at top for students)
+                <label htmlFor="isCampusDrive" className="text-xs text-foreground cursor-pointer font-medium">
+                  Mark as Exclusive Campus Drive (pinned at top for students)
                 </label>
               </div>
 

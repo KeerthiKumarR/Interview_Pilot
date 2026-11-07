@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    const systemPrompt = `You are the Placement Readiness Copilot AI Intake Assistant for MSOT students.
+    const systemPrompt = `You are the Placement Readiness Copilot AI Intake Assistant for engineering students.
 Your goal is to converse with the student and extract all placement-relevant information they share in any order:
 1. Target job role (e.g. Frontend Engineer, Full Stack Developer, ML Engineer)
 2. GitHub handle or profile link

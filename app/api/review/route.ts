@@ -17,7 +17,7 @@ interface CachedReviewResponse {
 
 const reviewMemoryCache = new Map<string, CachedReviewResponse>();
 
-function invalidateReviewCache(userId?: string) {
+export function invalidateReviewCache(userId?: string) {
   if (userId) {
     reviewMemoryCache.delete(userId);
   } else {

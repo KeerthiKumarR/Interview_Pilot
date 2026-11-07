@@ -35,7 +35,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { MiraiLogo } from "@/components/mirai-logo";
+import { InterviewPilotLogo } from "@/components/interview-pilot-logo";
 import { VoiceOrb } from "@/components/voice-orb";
 import { stopAllTTSAudio } from "@/hooks/use-tts";
 import { stopSpeaking } from "@/hooks/use-web-speech";
@@ -885,9 +885,9 @@ export function InterviewStageShell({
 
       {/* ─── 1. TOP HEADER BAR ────────────────────────────────────────── */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/85 backdrop-blur-md px-6 z-30">
-        {/* Left: Mirai Copilot Logo + Role Title */}
+        {/* Left: InterviewPilot Logo + Role Title */}
         <div className="flex items-center gap-3">
-          <MiraiLogo size={26} showText={true} textClassName="text-base font-bold tracking-tight text-foreground" />
+          <InterviewPilotLogo size={26} showText={true} textClassName="text-base font-bold tracking-tight text-foreground" />
 
           <div className="h-5 w-px bg-border mx-1" />
 

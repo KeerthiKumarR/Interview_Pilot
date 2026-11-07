@@ -320,9 +320,30 @@ ${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
     const isPooja = voiceId?.includes("pooja");
     const examinerName = isMale ? "Arun" : isPooja ? "Pooja" : "Nalini";
 
-    const openingMessageContent = isBehavioral
-      ? `Hi, I'm ${examinerName}, and I'll be leading your behavioral competency evaluation today. We'll be walking through real engineering situations using the STAR method. To get started, please introduce yourself and share a brief overview of your background.`
-      : `Hi, I'm ${examinerName}, and I'll be conducting your ${roleName} Placement Viva today. I've reviewed your background${skillsPhrase}${projectPhrase}. To kick things off with Stage 1, please introduce yourself and share what excites you about building scalable systems.`;
+    const reqSpokenLang = ((body.spokenLanguage as string) || "en-IN").toLowerCase();
+    let openingMessageContent = "";
+
+    if (reqSpokenLang.startsWith("hi")) {
+      openingMessageContent = `नमस्ते! मैं ${examinerName} हूँ, और आज मैं आपका ${roleName} प्लेसमेंट वायवा इंटरव्यू लूँगा। मैंने आपकी प्रोफाइल और आपके मुख्य प्रोजेक्ट्स की समीक्षा की है। स्टेज 1 शुरू करने के लिए, कृपया अपना संक्षिप्त परिचय दें और बताएं कि स्केलेबल सिस्टम्स बनाने में आपकी क्या रुचि है।`;
+    } else if (reqSpokenLang.startsWith("kn")) {
+      openingMessageContent = `ನಮಸ್ಕಾರ! ನಾನು ${examinerName}, ಮತ್ತು ಇಂದು ನಾನು ನಿಮ್ಮ ${roleName} ಪ್ಲೇಸ್‌ಮೆಂಟ್ ವೈವಾ ಸಂದರ್ಶನವನ್ನು ನಡೆಸಲಿದ್ದೇನೆ. ನಾನು ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಮತ್ತು ಪ್ರಾಜೆಕ್ಟ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿದ್ದೇನೆ. ಹಂತ 1 ಅನ್ನು ಪ್ರಾರಂಭಿಸಲು, ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ.`;
+    } else if (reqSpokenLang.startsWith("ta")) {
+      openingMessageContent = `வணக்கம்! நான் ${examinerName}, இன்று உங்கள் ${roleName} பிளேஸ்மென்ட் வைவா நேர்காணலை நடத்த உள்ளேன். உங்கள் விவரக்குறிப்பு மற்றும் திட்டங்களை நான் மதிப்பாய்வு செய்துள்ளேன். நிலை 1-ஐ தொடங்க, தயவுசெய்து உங்களை அறிமுகப்படுத்துங்கள்.`;
+    } else if (reqSpokenLang.startsWith("te")) {
+      openingMessageContent = `నమస్కారం! నేను ${examinerName}, ఈ రోజు మీ ${roleName} ప్లేస్‌మెంట్ వైవా ఇంటర్వ్యూను నిర్వహించబోతున్నాను. నేను మీ ప్రొఫైల్ మరియు ప్రాజెక్ట్‌లను పరిశీలించాను. మొదటి దశను ప్రారంభించడానికి, దయచేసి మిమ్మల్ని మీరు పరిచయం చేసుకోండి.`;
+    } else if (reqSpokenLang.startsWith("mr")) {
+      openingMessageContent = `नमस्कार! मी ${examinerName}, आज मी तुमची ${roleName} प्लेसमेंट व्हायव्हा मुलाखत घेणार आहे. मी तुमचे प्रोफाइल आणि प्रकल्प तपासले आहेत. स्टेज 1 सुरू करण्यासाठी, कृपया तुमची थोडक्यात ओळख करून द्या.`;
+    } else if (reqSpokenLang.startsWith("bn")) {
+      openingMessageContent = `নমস্কার! আমি ${examinerName}, আজ আমি আপনার ${roleName} প্লেসমেন্ট ভাইভা সাক্ষাৎকার গ্রহণ করব। আমি আপনার প্রোফাইল এবং প্রকল্পগুলি পর্যালোচনা করেছি। প্রথম পর্যায় শুরু করতে, দয়া করে আপনার সংক্ষিপ্ত পরিচয় দিন।`;
+    } else if (reqSpokenLang.startsWith("gu")) {
+      openingMessageContent = `નમસ્તે! હું ${examinerName} છું, અને આજે હું તમારો ${roleName} પ્લેસમેન્ટ વાઇવા ઇન્ટરવ્યુ લઈશ. મેં તમારી પ્રોફાઇલ અને પ્રોજેક્ટ્સની સમીક્ષા કરી છે. તબક્કો 1 શરૂ કરવા માટે, કૃપા કરીને તમારો ટૂંકો પરિચય આપો.`;
+    } else if (reqSpokenLang.startsWith("ml")) {
+      openingMessageContent = `നമസ്കാരം! ഞാൻ ${examinerName}, ഇന്ന് നിങ്ങളുടെ ${roleName} പ്ലേസ്‌മെന്റ് വൈവ ഇന്റർവ്യൂ നടത്താൻ പോകുന്നു. നിങ്ങളുടെ പ്രൊഫൈലും പ്രോജക്റ്റുകളും ഞാൻ അവലോകനം ചെയ്തു. സ്റ്റേജ് 1 ആരംഭിക്കാൻ, ദയവായി സ്വയം പരിചയപ്പെടുത്തുക.`;
+    } else if (isBehavioral) {
+      openingMessageContent = `Hi, I'm ${examinerName}, and I'll be leading your behavioral competency evaluation today. We'll be walking through real engineering situations using the STAR method. To get started, please introduce yourself and share a brief overview of your background.`;
+    } else {
+      openingMessageContent = `Hi, I'm ${examinerName}, and I'll be conducting your ${roleName} Placement Viva today. I've reviewed your background${skillsPhrase}${projectPhrase}. To kick things off with Stage 1, please introduce yourself and share what excites you about building scalable systems.`;
+    }
 
     // Create the interview record with initial assistant greeting pre-seeded
     const interview = await prisma.interview.create({

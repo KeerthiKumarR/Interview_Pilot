@@ -217,6 +217,7 @@ export function useChatStream(options: UseChatStreamOptions) {
               currentQuestionTitle: store.currentQuestion?.title || null,
               currentQuestionPrompt: store.currentQuestion?.promptText || null,
               currentCategory: store.activeCategory,
+              spokenLanguage: store.sttLanguage || "en-IN",
             }),
           }
         );
@@ -254,20 +255,22 @@ export function useChatStream(options: UseChatStreamOptions) {
           // onToken
           (token, isReasoning) => {
             resetTimeout();
-            // Do not append raw internal reasoning tokens to the candidate's visible chat bubble
-            if (!isReasoning) {
-              const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-              const nextContent = cleanInterviewChatText((currentMsg?.content ?? "") + token);
-              useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, nextContent);
+            // Never append internal reasoning / thinking tokens to candidate dialogue
+            if (isReasoning) {
+              options.onToken?.(token, isReasoning);
+              return;
             }
+            const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
+            const rawContent = (currentMsg?.content ?? "") + token;
+            const nextContent = cleanInterviewChatText(rawContent);
+            useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, nextContent);
             options.onToken?.(token, isReasoning);
           },
           // onDone
           async (fullText) => {
             clearTimeout(timeoutIdRef.current);
             const currentMsg = useInterviewStore.getState().messages.find((m) => m.id === msgId);
-            const rawText = fullText || (currentMsg?.content ?? "");
-            const textToUse = cleanInterviewChatText(rawText);
+            const textToUse = cleanInterviewChatText(fullText || (currentMsg?.content ?? ""));
             
             useInterviewStore.getState().appendOrUpdateAssistantMessage(msgId, textToUse);
             const didPasteSuccessfully = textToUse.trim().length > 0;

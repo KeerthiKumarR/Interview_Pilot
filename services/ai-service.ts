@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────
-// Mirai Copilot — AI Service
+// InterviewPilot — AI Service
 // ──────────────────────────────────────────────
 // Handles all communication with DeepSeek V4 Flash API.
 // Provides interviewer persona, problem presentation,
@@ -183,7 +183,7 @@ export async function deepseekChat(
           Authorization: `Bearer ${key}`,
           ...(isOpenRouter ? {
             "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "Mirai Copilot",
+            "X-Title": "InterviewPilot",
           } : {}),
         },
         body: JSON.stringify({
@@ -424,7 +424,7 @@ export async function deepseekChatStream(
           ...(isOpenRouter
             ? {
                 "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "Mirai Copilot",
+                "X-Title": "InterviewPilot",
               }
             : {}),
         },
@@ -854,38 +854,44 @@ CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: KANNADA (ಕನ್ನಡ)
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: TAMIL (தமிழ்)
 - The candidate has explicitly chosen Tamil (தமிழ்) as their spoken interview language.
-- You MUST conduct this entire interview and formulate spoken dialogue in Tamil script.
-- Keep standard technical terms (React, Redis, Docker, API, etc.) in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in native Tamil script (e.g. "வணக்கம்! நான் ${interviewerName}...", "உங்கள் திட்டத்தின் கட்டமைப்பு பற்றி சுருக்கமாக கூறுங்கள்...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Tamil script to speak with native human Tamil intonation!`;
   } else if (langCode.startsWith("te")) {
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: TELUGU (తెలుగు)
 - The candidate has explicitly chosen Telugu (తెలుగు) as their spoken interview language.
-- You MUST conduct this interview and formulate spoken dialogue in Telugu script.
-- Keep standard technical terms (React, Redis, Docker, API, etc.) in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in native Telugu script (e.g. "నమస్కారం! నేను ${interviewerName}...", "దయచేసి మీ ప్రాజెక్ట్ ఆర్కిటెక్చర్ గురించి వివరించండి...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Telugu script to speak with native human Telugu intonation!`;
   } else if (langCode.startsWith("mr")) {
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: MARATHI (मराठी)
 - The candidate has explicitly chosen Marathi (मराठी) as their spoken interview language.
-- You MUST conduct this interview and formulate spoken dialogue in Marathi (Devanagari script).
-- Keep standard technical terms in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in Marathi using standard Devanagari script (e.g. "नमस्कार! मी ${interviewerName}...", "कृपया मला तुमच्या प्रोजेक्टच्या आर्किटेक्चरबद्दल सांगा...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Marathi Devanagari script to speak with native human Marathi intonation!`;
   } else if (langCode.startsWith("bn")) {
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: BENGALI (বাংলা)
 - The candidate has explicitly chosen Bengali (বাংলা) as their spoken interview language.
-- You MUST conduct this interview and formulate spoken dialogue in Bengali script.
-- Keep standard technical terms in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in native Bengali script (e.g. "নমস্কার! আমি ${interviewerName}...", "দয়া করে আপনার প্রজেক্টের আর্কিটেকচার সম্পর্কে সংক্ষেপে বলুন...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Bengali script to speak with native human Bengali intonation!`;
   } else if (langCode.startsWith("gu")) {
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: GUJARATI (ગુજરાતી)
 - The candidate has explicitly chosen Gujarati (ગુજરાતી) as their spoken interview language.
-- You MUST conduct this interview and formulate spoken dialogue in Gujarati script.
-- Keep standard technical terms in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in native Gujarati script (e.g. "નમસ્તે! હું ${interviewerName}...", "કૃપા કરીને મને તમારા પ્રોજેક્ટના આર્કિટેક્ચર વિશે જણાવો...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Gujarati script to speak with native human Gujarati intonation!`;
   } else if (langCode.startsWith("ml")) {
     spokenLangInstruction = `
 CRITICAL SPOKEN VIVA LANGUAGE DIRECTIVE: MALAYALAM (മലയാളം)
 - The candidate has explicitly chosen Malayalam (മലയാളം) as their spoken interview language.
-- You MUST conduct this interview and formulate spoken dialogue in Malayalam script.
-- Keep standard technical terms in English.`;
+- You MUST conduct this entire interview and formulate ALL spoken dialogue in native Malayalam script (e.g. "നമസ്കാരം! ഞാൻ ${interviewerName}...", "ദയവായി നിങ്ങളുടെ പ്രോജക്റ്റ് ആർക്കിടെക്ചറിനെക്കുറിച്ച് വിശദീകരിക്കുക...").
+- Keep technical terms (React, Next.js, Redis, Docker, API, Database, Schema, Cache, Index, Latency, Big-O) in English as standard practice.
+- Do NOT output full English paragraphs. The Text-To-Speech engine uses your Malayalam script to speak with native human Malayalam intonation!`;
   }
 
   const isBehavioral =

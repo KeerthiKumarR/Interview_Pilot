@@ -926,9 +926,21 @@ export function InterviewClient({
             const fallbackInterviewerName = (selectedVoiceId && (selectedVoiceId.includes("arun") || selectedVoiceId.includes("arav") || selectedVoiceId.includes("male") ? "Arun" : selectedVoiceId.includes("pooja") ? "Pooja" : "Nalini")) || (isFemale ? "Nalini" : "Arun");
             const lang = currentStore.sttLanguage || "en-IN";
             if (lang.startsWith("hi")) {
-              openingText = `नमस्ते! मैं ${fallbackInterviewerName} हूँ, और आज मैं आपका प्लेसमेंट वायवा इंटरव्यू लूँगी। मैंने आपकी प्रोफाइल और आपके प्रोजेक्ट्स को देखा है। स्टेज 1 शुरू करने के लिए, कृपया अपना परिचय दें और सॉफ्टवेयर इंजीनियरिंग में अपनी यात्रा के बारे में संक्षेप में बताएं।`;
+              openingText = `नमस्ते! मैं ${fallbackInterviewerName} हूँ, और आज मैं आपका प्लेसमेंट वायवा इंटरव्यू लूँगा। मैंने आपकी प्रोफाइल और आपके मुख्य प्रोजेक्ट्स को देखा है। स्टेज 1 शुरू करने के लिए, कृपया अपना संक्षिप्त परिचय दें और सॉफ्टवेयर इंजीनियरिंग में अपनी यात्रा के बारे में बताएं।`;
             } else if (lang.startsWith("kn")) {
-              openingText = `ನಮಸ್ಕಾರ! ನಾನು ${fallbackInterviewerName}, ಮತ್ತು ಇಂದು ನಾನು ನಿಮ್ಮ ಪ್ಲೇಸ್‌ಮೆಂಟ್ ವೈವಾ ಇಂಟರ್ವ್ಯೂ ನಡೆಸಲಿದ್ದೇನೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ ಮತ್ತು ನಿಮ್ಮ ತಾಂತ್ರಿಕ ಪ್ರಯಾಣದ ಬಗ್ಗೆ ತಿಳಿಸಿ.`;
+              openingText = `ನಮಸ್ಕಾರ! ನಾನು ${fallbackInterviewerName}, ಮತ್ತು ಇಂದು ನಾನು ನಿಮ್ಮ ಪ್ಲೇಸ್‌ಮೆಂಟ್ ವೈವಾ ಸಂದರ್ಶನವನ್ನು ನಡೆಸಲಿದ್ದೇನೆ. ನಾನು ನಿಮ್ಮ ಪ್ರೊಫೈಲ್ ಮತ್ತು ಪ್ರಾಜೆಕ್ಟ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿದ್ದೇನೆ. ಹಂತ 1 ಅನ್ನು ಪ್ರಾರಂಭಿಸಲು, ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪರಿಚಯವನ್ನು ನೀಡಿ.`;
+            } else if (lang.startsWith("ta")) {
+              openingText = `வணக்கம்! நான் ${fallbackInterviewerName}, இன்று உங்கள் பிளேஸ்மென்ட் வைவா நேர்காணலை நடத்த உள்ளேன். உங்கள் விவரக்குறிப்பு மற்றும் திட்டங்களை நான் மதிப்பாய்வு செய்துள்ளேன். நிலை 1-ஐ தொடங்க, தயவுசெய்து உங்களை அறிமுகப்படுத்துங்கள்.`;
+            } else if (lang.startsWith("te")) {
+              openingText = `నమస్కారం! నేను ${fallbackInterviewerName}, ఈ రోజు మీ ప్లేస్‌మెంట్ వైవా ఇంటర్వ్యూను నిర్వహించబోతున్నాను. నేను మీ ప్రొఫైల్ మరియు ప్రాజెక్ట్‌లను పరిశీలించాను. మొదటి దశను ప్రారంభించడానికి, దయచేసి మిమ్మల్ని మీరు పరిచయం చేసుకోండి.`;
+            } else if (lang.startsWith("mr")) {
+              openingText = `नमस्कार! मी ${fallbackInterviewerName}, आज मी तुमची प्लेसमेंट व्हायव्हा मुलाखत घेणार आहे. मी तुमचे प्रोफाइल आणि प्रकल्प तपासले आहेत. स्टेज 1 सुरू करण्यासाठी, कृपया तुमची थोडक्यात ओळख करून द्या.`;
+            } else if (lang.startsWith("bn")) {
+              openingText = `নমস্কার! আমি ${fallbackInterviewerName}, আজ আমি আপনার প্লেসমেন্ট ভাইভা সাক্ষাৎকার গ্রহণ করব। আমি আপনার প্রোফাইল এবং প্রকল্পগুলি পর্যালোচনা করেছি। প্রথম পর্যায় শুরু করতে, দয়া করে আপনার সংক্ষিপ্ত পরিচয় দিন।`;
+            } else if (lang.startsWith("gu")) {
+              openingText = `નમસ્તે! હું ${fallbackInterviewerName} છું, અને આજે હું તમારો પ્લેસમેન્ટ વાઇવા ઇન્ટરવ્યુ લઈશ. મેં તમારી પ્રોફાઇલ અને પ્રોજેક્ટ્સની સમીક્ષા કરી છે. તબક્કો 1 શરૂ કરવા માટે, કૃપા કરીને તમારો ટૂંકો પરિચય આપો.`;
+            } else if (lang.startsWith("ml")) {
+              openingText = `നമസ്കാരം! ഞാൻ ${fallbackInterviewerName}, ഇന്ന് നിങ്ങളുടെ പ്ലേസ്‌മെന്റ് വൈവ ഇന്റർവ്യൂ നടത്താൻ പോകുന്നു. നിങ്ങളുടെ പ്രൊഫൈലും പ്രോജക്റ്റുകളും ഞാൻ അവലോകനം ചെയ്തു. സ്റ്റേജ് 1 ആരംഭിക്കാൻ, ദയവായി സ്വയം പരിചയപ്പെടുത്തുക.`;
             } else {
               openingText = `Hi, I'm ${fallbackInterviewerName}, and I'll be conducting your Placement Viva today. I'm excited to review your background and dive into your featured project. To get started with Stage 1, please introduce yourself and tell me a bit about your journey into full-stack development.`;
             }

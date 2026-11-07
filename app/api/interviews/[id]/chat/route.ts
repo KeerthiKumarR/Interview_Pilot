@@ -238,64 +238,26 @@ export async function POST(req: Request, context: RouteContext) {
       profileSessionCache.set(interview.user.id, { profile: studentProfile, expiry: now + 60000 });
     }
 
-    let targetCompany = "";
-    let effectiveTargetRole = studentProfile?.targetRole || "Software Engineer";
-    let targetSkillsStr = interview.jobRole?.targetSkills || "";
-
-    if (interview.problemDescription) {
-      const roleMatch = interview.problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
-      if (roleMatch && roleMatch[1]?.trim()) effectiveTargetRole = roleMatch[1].trim();
-      const compMatch = interview.problemDescription.match(/\-\s*\*\*Target Company\*\*:\s*([^\n\r]+)/i);
-      if (compMatch && compMatch[1]?.trim()) targetCompany = compMatch[1].trim();
-      const stackMatch = interview.problemDescription.match(/\-\s*\*\*(?:Required Stack|Verified Tech Stack)\*\*:\s*([^\n\r]+)/i);
-      if (stackMatch && stackMatch[1]?.trim()) targetSkillsStr = stackMatch[1].trim();
-    }
-
-    if (interview.jobRole?.title) {
-      effectiveTargetRole = interview.jobRole.title;
-    }
-    if (interview.jobRole?.targetSkills) {
-      targetSkillsStr = interview.jobRole.targetSkills;
-    }
-
-    if (!targetCompany && interview.problemTitle) {
+    // If the interview is for a specific job viva, anchor on the job's role rather than the student's default target role
+    let activeTargetRole = studentProfile?.targetRole || "Software Engineer";
+    if (interview.problemTitle) {
       if (interview.problemTitle.includes("Technical Viva:")) {
-        const parts = interview.problemTitle.split("Technical Viva:");
-        targetCompany = parts[0]?.trim();
-        if (!effectiveTargetRole && parts[1]?.trim()) effectiveTargetRole = parts[1].trim();
+        activeTargetRole = interview.problemTitle.split("Technical Viva:")[1]?.trim() || activeTargetRole;
       } else if (interview.problemTitle.includes(":")) {
-        const parts = interview.problemTitle.split(":");
-        targetCompany = parts[0]?.trim();
-        if (!effectiveTargetRole && parts[1]?.trim()) effectiveTargetRole = parts[1].trim();
+        activeTargetRole = interview.problemTitle.split(":")[1]?.trim() || activeTargetRole;
       }
     }
 
-    const jobSpecificDirective = `
-======================================================================
-ACTIVE INTERVIEW TARGET ROLE & COMPANY CONTEXT
-======================================================================
-TARGET ROLE: ${effectiveTargetRole}
-${targetCompany ? `TARGET COMPANY: ${targetCompany}` : ""}
-${targetSkillsStr ? `REQUIRED TECH STACK: ${targetSkillsStr}` : ""}
-
-CRITICAL INSTRUCTIONS:
-- You are assessing the candidate specifically for the role of "${effectiveTargetRole}"${targetCompany ? ` at ${targetCompany}` : ""}.
-- Do NOT assess them for generic roles; every technical question, architecture probe, and coding inquiry MUST evaluate their fitness for "${effectiveTargetRole}"${targetSkillsStr ? ` and the stack (${targetSkillsStr})` : ""}.
-- In Stage 2 (Architecture Defense), probe how their past project designs, database choices, and latency trade-offs prepare them for ${effectiveTargetRole}.
-- In Stage 3 (Technical Problem Solving), ask practical problem-solving questions directly relevant to ${effectiveTargetRole}.
-======================================================================
-`;
-
     const profileDirective = buildProfileInterviewDirective(studentProfile ? {
-      targetRole: effectiveTargetRole,
+      targetRole: activeTargetRole,
       skills: Array.isArray(studentProfile.skills) ? (studentProfile.skills as string[]) : [],
       projects: studentProfile.projects,
       achievements: studentProfile.achievements,
     } : null);
 
     const systemPrompt = isDynamicMode
-      ? `${baseSystemPrompt}${dynamicInterviewerPrompt}${jobSpecificDirective}${profileDirective}`
-      : `${baseSystemPrompt}${jobSpecificDirective}${profileDirective}`;
+      ? `${baseSystemPrompt}${dynamicInterviewerPrompt}${profileDirective}`
+      : `${baseSystemPrompt}${profileDirective}`;
 
     // Build full user prompt combining message + editor code + execution result into a single payload
     // Wrap candidate input in prompt-injection resistant delimiters

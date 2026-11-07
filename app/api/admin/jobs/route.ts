@@ -101,7 +101,7 @@ export async function GET() {
 
 /**
  * POST /api/admin/jobs
- * Allows MSOT staff to post a new job or internship directly to students.
+ * Allows campus placement staff to post a new job or internship directly to students.
  */
 export async function POST(req: Request) {
   try {

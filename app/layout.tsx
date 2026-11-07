@@ -19,23 +19,25 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mirai Copilot — AI Placement & Viva Platform",
+  title: "InterviewPilot — Autonomous AI Placement Readiness & Mock Interview Simulator",
   description:
-    "Mirai Copilot: Autonomous AI Interview Agent for engineering placement vivas, live code execution, real-time voice speech analysis, and multi-tier readiness scoring.",
+    "InterviewPilot: Autonomous AI Interview Agent for engineering placement vivas, live code execution, real-time voice speech analysis, and multi-tier readiness scoring.",
   keywords: [
-    "Mirai Copilot",
+    "InterviewPilot",
     "AI Interviewer",
     "Placement Readiness",
     "Technical Viva",
     "Coding Interview Copilot",
-    "MSOT Benchmark",
+    "Gnani AI",
+    "Prisma STT",
+    "Timbre TTS",
   ],
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg?v=pilot3", type: "image/svg+xml" },
+      { url: "/favicon.ico?v=pilot3", sizes: "any" },
     ],
-    apple: "/apple-icon.png",
+    apple: "/apple-icon.png?v=pilot3",
   },
 };
 
@@ -54,8 +56,8 @@ export default function RootLayout({
         <ExtensionErrorSuppressor />
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
+          defaultTheme="system"
+          enableSystem
           disableTransitionOnChange
         >
           <ClerkProvider appearance={{ theme: shadcn }}>

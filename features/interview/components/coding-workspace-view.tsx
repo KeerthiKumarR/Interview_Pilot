@@ -70,45 +70,43 @@ export function CodingWorkspaceView({
     if (!isViva) return null;
 
     let roleName = "Software Engineer";
-    let companyName = "";
     let projectTitle: string | null = null;
     let liveUrl: string | null = null;
     let repoUrl: string | null = null;
     let techStack: string | null = null;
 
-    if (problemDescription) {
-      const roleMatch = problemDescription.match(/\-\s*\*\*Role Focus\*\*:\s*([^\n\r]+)/i);
-      if (roleMatch && roleMatch[1]?.trim()) roleName = roleMatch[1].trim();
-      const compMatch = problemDescription.match(/\-\s*\*\*Target Company\*\*:\s*([^\n\r]+)/i);
-      if (compMatch && compMatch[1]?.trim()) companyName = compMatch[1].trim();
-      const stackMatch = problemDescription.match(/\-\s*\*\*(?:Required Stack|Verified Tech Stack)\*\*:\s*([^\n\r]+)/i);
-      if (stackMatch && stackMatch[1]?.trim()) techStack = stackMatch[1].trim();
-      const liveMatch = problemDescription.match(/\-\s*\*\*Live Deployment\*\*:\s*([^\n\r]+)/i);
-      if (liveMatch && liveMatch[1]?.trim().startsWith("http")) liveUrl = liveMatch[1].trim();
-      const repoMatch = problemDescription.match(/\-\s*\*\*Source Code Repository\*\*:\s*([^\n\r]+)/i);
-      if (repoMatch && repoMatch[1]?.trim().startsWith("http")) repoUrl = repoMatch[1].trim();
-    }
-
     if (problemTitle) {
       if (problemTitle.includes("Technical Viva:")) {
         const parts = problemTitle.split("Technical Viva:");
-        if (!companyName) companyName = parts[0]?.trim();
-        if (parts[1]?.trim()) roleName = parts[1].trim();
+        const company = parts[0]?.trim() || "";
+        roleName = parts[1]?.trim() || "Software Engineer";
+        projectTitle = company ? `${roleName} (${company})` : roleName;
       } else if (problemTitle.includes(":")) {
         const parts = problemTitle.split(":");
-        if (!roleName || roleName === "Software Engineer") {
-          roleName = parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
-        }
-        projectTitle = parts[1].trim();
-      } else if (!roleName || roleName === "Software Engineer") {
+        roleName = parts[1]?.trim() || parts[0].replace(/Placement Viva/i, "").trim() || "Software Engineer";
+        projectTitle = parts[1]?.trim() || null;
+      } else {
         roleName = problemTitle.replace(/Placement Viva/i, "").trim() || "Software Engineer";
       }
     }
 
-    const displayRole = companyName ? `${roleName} (${companyName})` : roleName;
+    if (problemDescription) {
+      const liveMatch = problemDescription.match(/\-\s*\*\*Live Deployment\*\*:\s*([^\n\r]+)/i);
+      if (liveMatch && liveMatch[1]?.trim().startsWith("http")) {
+        liveUrl = liveMatch[1].trim();
+      }
+      const repoMatch = problemDescription.match(/\-\s*\*\*Source Code Repository\*\*:\s*([^\n\r]+)/i);
+      if (repoMatch && repoMatch[1]?.trim().startsWith("http")) {
+        repoUrl = repoMatch[1].trim();
+      }
+      const stackMatch = problemDescription.match(/\-\s*\*\*Verified Tech Stack\*\*:\s*([^\n\r]+)/i);
+      if (stackMatch && stackMatch[1]?.trim()) {
+        techStack = stackMatch[1].trim();
+      }
+    }
 
     return {
-      roleName: displayRole,
+      roleName,
       projectTitle,
       liveUrl,
       repoUrl,

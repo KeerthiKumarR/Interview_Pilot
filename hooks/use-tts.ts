@@ -178,7 +178,7 @@ function setInAudioCache(key: string, url: string) {
  */
 export function detectLanguageFromScript(text: string, defaultLang: string = "en-IN"): string {
   if (!text) return defaultLang;
-  if (/[\u0900-\u097F]/.test(text)) return "hi-IN"; // Hindi (Devanagari)
+  if (/[\u0900-\u097F]/.test(text)) return defaultLang.startsWith("mr") ? "mr-IN" : "hi-IN"; // Hindi / Marathi (Devanagari)
   if (/[\u0C80-\u0CFF]/.test(text)) return "kn-IN"; // Kannada
   if (/[\u0B80-\u0BFF]/.test(text)) return "ta-IN"; // Tamil
   if (/[\u0C00-\u0C7F]/.test(text)) return "te-IN"; // Telugu
