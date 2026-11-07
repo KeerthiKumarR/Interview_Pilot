@@ -32,19 +32,6 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const now = Date.now();
-    const cached = profileMemoryCache.get(user.id);
-    if (cached && cached.expiresAt > now) {
-      return NextResponse.json(
-        { profile: cached.profile },
-        {
-          headers: {
-            "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
-          },
-        }
-      );
-    }
-
     const profile = await prisma.studentProfile.findUnique({
       where: { userId: user.id },
       include: {
@@ -58,16 +45,11 @@ export async function GET() {
       },
     });
 
-    profileMemoryCache.set(user.id, {
-      profile,
-      expiresAt: now + 30_000, // 30s cache
-    });
-
     return NextResponse.json(
       { profile },
       {
         headers: {
-          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       }
     );

@@ -125,6 +125,15 @@ export const EXAMINER_OPTIONS = [
   },
 ] as const;
 
+export const TARGET_ROLE_OPTIONS = [
+  "Frontend Engineer",
+  "Backend Engineer",
+  "Full Stack Developer",
+  "AI / ML Engineer",
+  "Cloud / DevOps Engineer",
+  "System Software Engineer",
+] as const;
+
 /**
  * High-Confidence, Zero-Friction Placement Viva Launchpad.
  * Automatically anchors the viva to the student's target role, verified resume,
@@ -142,6 +151,7 @@ export function StartInterviewModal({
   // Core setup states
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [studentProfile, setStudentProfile] = useState<StudentProfileSummary | null>(null);
+  const [selectedRoleTitle, setSelectedRoleTitle] = useState<string>(initialJobRole || "");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<"technical" | "behavioral">("technical");
   const [duration, setDuration] = useState<number>(15);
@@ -204,6 +214,9 @@ export function StartInterviewModal({
     if (cachedProfile?.profile) {
       const profileData = cachedProfile.profile;
       setStudentProfile(profileData);
+      if (!initialJobRole && profileData.targetRole) {
+        setSelectedRoleTitle(profileData.targetRole);
+      }
       if (profileData.projects && profileData.projects.length > 0) {
         setSelectedProjectId(profileData.projects[0].id);
       }
@@ -212,8 +225,8 @@ export function StartInterviewModal({
     async function loadInitialData() {
       try {
         const [rolesRes, profileRes] = await Promise.all([
-          fetch("/api/roles"),
-          fetch("/api/profile"),
+          fetch("/api/roles", { cache: "no-store" }),
+          fetch("/api/profile", { cache: "no-store" }),
         ]);
 
         if (rolesRes.ok) {
@@ -228,6 +241,9 @@ export function StartInterviewModal({
           if (!ignore && data.profile) {
             const profileData: StudentProfileSummary = data.profile;
             setStudentProfile(profileData);
+            if (!initialJobRole && profileData.targetRole) {
+              setSelectedRoleTitle(profileData.targetRole);
+            }
 
             if (profileData.projects && profileData.projects.length > 0) {
               setSelectedProjectId(profileData.projects[0].id);
@@ -325,6 +341,12 @@ export function StartInterviewModal({
       const activeTrack =
         INTERVIEW_TRACKS.find((t) => t.id === selectedTrack) || INTERVIEW_TRACKS[0];
 
+      const effectiveRole =
+        selectedRoleTitle.trim() ||
+        initialJobRole ||
+        studentProfile?.targetRole ||
+        "Full Stack Developer";
+
       const response = await fetch("/api/interviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -337,7 +359,7 @@ export function StartInterviewModal({
           personalizeWithProfile: true, // Always automatically anchored to verified profile
           provider: "hosted", // Fast high-throughput cloud inference (Groq)
           projectId: selectedProjectId || undefined,
-          targetRole: initialJobRole || undefined,
+          targetRole: effectiveRole,
           company: initialCompany || undefined,
           voiceId: selectedVoiceId,
           spokenLanguage,
@@ -453,12 +475,34 @@ export function StartInterviewModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
               <div className="rounded-lg bg-background/80 border border-border/80 p-2.5">
-                <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-wider">
-                  Target Role
-                </span>
-                <span className="font-bold text-foreground truncate block mt-0.5">
-                  {targetRole}
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted-foreground block uppercase tracking-wider">
+                    Target Role
+                  </span>
+                  <span className="text-[9px] font-bold text-primary">
+                    Switch Anytime
+                  </span>
+                </div>
+                <div className="mt-1">
+                  <select
+                    value={selectedRoleTitle || targetRole}
+                    onChange={(e) => setSelectedRoleTitle(e.target.value)}
+                    className="w-full bg-background border border-border/80 rounded-md px-2 py-1 text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer truncate"
+                  >
+                    {/* Preserve custom role if candidate typed a non-preset role in profile */}
+                    {selectedRoleTitle && !TARGET_ROLE_OPTIONS.includes(selectedRoleTitle as any) && (
+                      <option value={selectedRoleTitle}>{selectedRoleTitle}</option>
+                    )}
+                    {studentProfile?.targetRole && !TARGET_ROLE_OPTIONS.includes(studentProfile.targetRole as any) && studentProfile.targetRole !== selectedRoleTitle && (
+                      <option value={studentProfile.targetRole}>{studentProfile.targetRole} (From Profile)</option>
+                    )}
+                    {TARGET_ROLE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt} {studentProfile?.targetRole === opt ? "(Profile)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="rounded-lg bg-background/80 border border-border/80 p-2.5">
