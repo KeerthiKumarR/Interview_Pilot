@@ -214,7 +214,7 @@ export async function POST(
 
           const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
             method: "POST",
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.timeout(15000),
             headers: {
               "Content-Type": "application/json",
               "X-API-Key-ID": gnaniApiKey,
@@ -375,9 +375,9 @@ export async function POST(
         targetVoice = voice;
         fallbackVoice = isMaleVoice ? "am_adam" : "af_heart";
       } else if (isMaleVoice) {
-        targetModel = "hexgrad/kokoro-82m";
-        targetVoice = "am_adam";
-        fallbackVoice = "am_adam";
+        targetModel = "openai/tts-1";
+        targetVoice = "onyx";
+        fallbackVoice = "alloy";
       }
     }
 

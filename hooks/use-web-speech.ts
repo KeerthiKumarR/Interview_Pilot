@@ -309,8 +309,8 @@ export function getBestMaleVoice(voices?: SpeechSynthesisVoice[], preferredLang?
     if (regionalVoice) return regionalVoice;
   }
 
-  // 1. High priority: Verified Indian English male voices (e.g. Rishi en-IN, Prabhat, Aman)
-  const indianMaleNames = ["rishi", "prabhat", "aman", "arun", "ramesh", "rohan", "vikram", "kabir", "neer", "dev", "male"];
+  // 1. High priority: Verified natural Indian English male voices
+  const indianMaleNames = ["rishi (enhanced)", "rishi", "prabhat", "aman", "arun", "ramesh", "rohan", "vikram", "kabir", "neer", "dev"];
   const indianMale = list.find((v) => {
     const n = v.name.toLowerCase();
     const l = v.lang.toLowerCase();
@@ -319,13 +319,27 @@ export function getBestMaleVoice(voices?: SpeechSynthesisVoice[], preferredLang?
   });
   if (indianMale) return indianMale;
 
-  // 2. High-quality natural male voices on macOS, Windows, Chrome, Edge
-  const standardMaleNames = [
-    "daniel", "alex", "fred", "david", "george", "oliver", "tom",
-    "microsoft david", "microsoft mark", "google us english male", "google uk english male",
-    "guy", "ryan", "christopher", "eric", "brian"
+  // 2. High priority: Modern Neural & Natural male voices on Chrome, Edge, and macOS
+  const modernNaturalVoices = [
+    "google uk english male",
+    "google us english male",
+    "google english male",
+    "microsoft ryan online (natural)",
+    "microsoft guy online (natural)",
+    "microsoft christopher online (natural)",
+    "daniel (enhanced)",
+    "oliver (enhanced)",
+    "evan (enhanced)",
+    "nathan (enhanced)",
+    "daniel",
+    "oliver",
+    "ryan",
+    "guy",
+    "george",
+    "tom",
+    "david"
   ];
-  for (const name of standardMaleNames) {
+  for (const name of modernNaturalVoices) {
     const v = list.find((voice) => {
       const n = voice.name.toLowerCase();
       return n.includes(name) && !isFemaleVoice(n);
@@ -333,17 +347,31 @@ export function getBestMaleVoice(voices?: SpeechSynthesisVoice[], preferredLang?
     if (v) return v;
   }
 
-  // 3. Any voice explicitly tagged 'male' in its name (not matching female)
+  // 3. Any voice explicitly tagged 'male' or 'natural'
+  const taggedNatural = list.find((v) => {
+    const n = v.name.toLowerCase();
+    return (n.includes("natural") || n.includes("neural")) && !isFemaleVoice(n);
+  });
+  if (taggedNatural) return taggedNatural;
+
   const taggedMale = list.find((v) => v.name.toLowerCase().includes("male") && !isFemaleVoice(v.name));
   if (taggedMale) return taggedMale;
 
-  // 4. Any English voice that is definitely not female
+  // 4. Any English voice that is definitely not female (excluding legacy robotic voices)
+  const legacyRobotic = ["alex", "fred", "junior", "ralph", "albert", "bad news", "bahh", "bells", "boing", "bubbles", "cellos", "deranged", "good news", "hysterical", "pipe organ", "trinoids", "whisper", "zarvox"];
   const nonFemaleEnglish = list.find((v) => {
     const n = v.name.toLowerCase();
     const l = v.lang.toLowerCase();
-    return l.startsWith("en") && !isFemaleVoice(n);
+    return l.startsWith("en") && !isFemaleVoice(n) && !legacyRobotic.some((r) => n.includes(r));
   });
   if (nonFemaleEnglish) return nonFemaleEnglish;
+
+  // 5. Last resort legacy voices if nothing else exists
+  const legacyMale = list.find((v) => {
+    const n = v.name.toLowerCase();
+    return (n.includes("alex") || n.includes("fred") || n.includes("david")) && !isFemaleVoice(n);
+  });
+  if (legacyMale) return legacyMale;
 
   return list[0] || null;
 }
