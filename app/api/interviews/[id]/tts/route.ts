@@ -177,9 +177,9 @@ export async function POST(
 
     if (gnaniApiKey) {
       try {
-        let gnaniVoice = isMaleVoice
-          ? "Deepak" // Gnani Timbre v2.5 verified native Indian male voice (Deepak/Gaurav)
-          : (voice === "gnani_pooja" || voice?.includes("pooja") ? "Pooja" : "Nalini");
+        const candidateGnaniVoices = isMaleVoice
+          ? (voice === "gnani_ramesh" || voice?.includes("ramesh") ? ["Ramesh", "Deepak"] : ["Arun", "Deepak"])
+          : (voice === "gnani_pooja" || voice?.includes("pooja") ? ["Pooja"] : ["Nalini"]);
         // Only use Indic language code if the text actually contains Indic script!
         // If the text is in English (Latin alphabet), ALWAYS use "en-IN" so Nalini speaks in her natural Indian English voice.
         const hasIndicScript = /[\u0900-\u0D7F]/.test(text);
@@ -195,64 +195,67 @@ export async function POST(
         }
 
         const gnaniModel = process.env.GNANI_TIMBRE_MODEL || "timbre-v2.5";
-        const gnaniCacheKey = `gnani:${gnaniModel}:${gnaniVoice}:${targetLang}:${text}`;
-        const gnaniCached = ttsMemoryCache.get(gnaniCacheKey);
 
-        if (gnaniCached) {
-          return new NextResponse(new Uint8Array(gnaniCached.buffer), {
-            status: 200,
-            headers: {
-              "Content-Type": gnaniCached.contentType,
-              "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
-              "X-Audio-Cache": "HIT",
-              "X-TTS-Provider": "gnani-timbre",
-            },
-          });
-        }
+        for (const gnaniVoice of candidateGnaniVoices) {
+          const gnaniCacheKey = `gnani:${gnaniModel}:${gnaniVoice}:${targetLang}:${text}`;
+          const gnaniCached = ttsMemoryCache.get(gnaniCacheKey);
 
-        const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
-          method: "POST",
-          signal: AbortSignal.timeout(8000),
-          headers: {
-            "Content-Type": "application/json",
-            "X-API-Key-ID": gnaniApiKey,
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
-          },
-          body: JSON.stringify({
-            text,
-            voice: gnaniVoice,
-            model: gnaniModel,
-            language: targetLang,
-            speed: 1,
-            audio_config: {
-              container: "wav",
-            },
-          }),
-        });
-
-        if (gnaniRes.ok) {
-          const arrayBuffer = await gnaniRes.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const contentType = gnaniRes.headers.get("content-type") || "audio/wav";
-
-          if (ttsMemoryCache.size >= MAX_SERVER_AUDIO_CACHE) {
-            const oldestKey = ttsMemoryCache.keys().next().value;
-            if (oldestKey) ttsMemoryCache.delete(oldestKey);
+          if (gnaniCached) {
+            return new NextResponse(new Uint8Array(gnaniCached.buffer), {
+              status: 200,
+              headers: {
+                "Content-Type": gnaniCached.contentType,
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
+                "X-Audio-Cache": "HIT",
+                "X-TTS-Provider": "gnani-timbre",
+              },
+            });
           }
-          ttsMemoryCache.set(gnaniCacheKey, { buffer, contentType });
 
-          return new NextResponse(new Uint8Array(buffer), {
-            status: 200,
+          const gnaniRes = await fetch("https://api.vachana.ai/api/v1/tts/inference", {
+            method: "POST",
+            signal: AbortSignal.timeout(8000),
             headers: {
-              "Content-Type": contentType,
-              "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
-              "X-Audio-Cache": "MISS",
-              "X-TTS-Provider": "gnani-timbre",
+              "Content-Type": "application/json",
+              "X-API-Key-ID": gnaniApiKey,
+              "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
             },
+            body: JSON.stringify({
+              text,
+              voice: gnaniVoice,
+              model: gnaniModel,
+              language: targetLang,
+              speed: 1,
+              audio_config: {
+                container: "wav",
+              },
+            }),
           });
-        } else {
-          const errText = await gnaniRes.text();
-          console.warn("Gnani Timbre TTS failed, using voice fallback:", gnaniRes.status, errText);
+
+          if (gnaniRes.ok) {
+            const arrayBuffer = await gnaniRes.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+            const contentType = gnaniRes.headers.get("content-type") || "audio/wav";
+
+            if (ttsMemoryCache.size >= MAX_SERVER_AUDIO_CACHE) {
+              const oldestKey = ttsMemoryCache.keys().next().value;
+              if (oldestKey) ttsMemoryCache.delete(oldestKey);
+            }
+            ttsMemoryCache.set(gnaniCacheKey, { buffer, contentType });
+
+            return new NextResponse(new Uint8Array(buffer), {
+              status: 200,
+              headers: {
+                "Content-Type": contentType,
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800, immutable",
+                "X-Audio-Cache": "MISS",
+                "X-TTS-Provider": "gnani-timbre",
+              },
+            });
+          } else {
+            const errText = await gnaniRes.text();
+            console.warn(`Gnani Timbre voice (${gnaniVoice}) failed:`, gnaniRes.status, errText);
+          }
         }
       } catch (err) {
         console.warn("Gnani Timbre TTS call error, using voice fallback:", err);
@@ -465,7 +468,17 @@ export async function POST(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.warn("All OpenRouter TTS attempts failed, using Google Regional fallback:", response.status, errorText);
+      console.warn("All OpenRouter TTS attempts failed, checking fallback:", response.status, errorText);
+
+      // CRITICAL: Google Regional TTS ONLY has female voices.
+      // If this is a male examiner (Arun), NEVER use Google Regional, otherwise Arun speaks with a female voice.
+      // Returning 503 instructs the client to invoke the native male speech synthesis fallback.
+      if (isMaleVoice) {
+        return NextResponse.json(
+          { error: "Male cloud TTS unavailable, deferring to browser male speech synthesis" },
+          { status: 503 }
+        );
+      }
 
       const googleBuffer = await fetchGoogleRegionalTTS(text, language);
       if (googleBuffer) {

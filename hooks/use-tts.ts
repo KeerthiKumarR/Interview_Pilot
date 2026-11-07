@@ -267,10 +267,23 @@ export function resolveVoiceForText(rawVoiceId: string | null | undefined, text:
     cleanLower.includes("pooja speaking");
 
   if (mentionsMale) {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("interview_pilot_voice_id", "gnani_arun");
+      } catch {}
+      useInterviewStore.getState().setSelectedVoiceId("gnani_arun");
+    }
     return "gnani_arun";
   }
   if (mentionsFemale) {
-    return cleanLower.includes("pooja") ? "gnani_pooja" : "gnani_nalini";
+    const femaleVoice = cleanLower.includes("pooja") ? "gnani_pooja" : "gnani_nalini";
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("interview_pilot_voice_id", femaleVoice);
+      } catch {}
+      useInterviewStore.getState().setSelectedVoiceId(femaleVoice);
+    }
+    return femaleVoice;
   }
   if (!selectedVoiceId) {
     return "gnani_nalini";
@@ -526,11 +539,15 @@ export function useTTS(): UseTTSResult {
     if (!selectedVoiceId) {
       if (sentLower.includes("i'm arun") || sentLower.includes("i am arun") || sentLower.includes("i'm ramesh") || sentLower.includes("i am ramesh") || sentLower.includes("arun speaking") || sentLower.includes("ramesh speaking")) {
         selectedVoiceId = "gnani_arun";
+        store.setSelectedVoiceId("gnani_arun");
+        try { localStorage.setItem("interview_pilot_voice_id", "gnani_arun"); } catch {}
       } else {
         selectedVoiceId = "gnani_nalini";
       }
     } else if ((sentLower.includes("i'm arun") || sentLower.includes("i am arun") || sentLower.includes("i'm ramesh") || sentLower.includes("i am ramesh")) && getVoiceGender(selectedVoiceId) === "female") {
       selectedVoiceId = "gnani_arun";
+      store.setSelectedVoiceId("gnani_arun");
+      try { localStorage.setItem("interview_pilot_voice_id", "gnani_arun"); } catch {}
     }
     const language = store.sttLanguage || "en-IN";
 

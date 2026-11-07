@@ -202,7 +202,7 @@ const initialState = {
   isMicMuted: false,
   isSpeakerMuted: false,
   isCameraOff: false,
-  selectedVoiceId: "gnani_nalini" as string | null,
+  selectedVoiceId: (typeof window !== "undefined" && localStorage.getItem("interview_pilot_voice_id")) || ("gnani_nalini" as string | null),
   sttLanguage: (typeof window !== "undefined" && localStorage.getItem("interview_pilot_stt_lang")) || "en-IN",
   voiceInputMode: "manual" as const,
   isStreaming: false,
