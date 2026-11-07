@@ -24,7 +24,7 @@ export function getCacheTimestamp(key: string): number {
   if (mem) return mem.timestamp;
   if (typeof window !== "undefined") {
     try {
-      const stored = sessionStorage.getItem(`mirai_cache_${key}`) || localStorage.getItem(`mirai_cache_${key}`);
+      const stored = sessionStorage.getItem(`pilot_cache_${key}`) || localStorage.getItem(`pilot_cache_${key}`);
       if (stored) {
         const parsed = JSON.parse(stored);
         return parsed.timestamp || 0;
@@ -47,8 +47,8 @@ export function readCache<T>(key: string, ttlMs: number = DEFAULT_TTL_MS): T | n
   if (typeof window !== "undefined") {
     try {
       const stored =
-        sessionStorage.getItem(`mirai_cache_${key}`) ||
-        localStorage.getItem(`mirai_cache_${key}`);
+        sessionStorage.getItem(`pilot_cache_${key}`) ||
+        localStorage.getItem(`pilot_cache_${key}`);
       if (stored) {
         const parsed: CacheEntry<T> = JSON.parse(stored);
         if (now - parsed.timestamp < ttlMs) {
@@ -77,8 +77,8 @@ export function writeCache<T>(key: string, data: T) {
   if (typeof window !== "undefined") {
     try {
       const serialized = JSON.stringify(entry);
-      sessionStorage.setItem(`mirai_cache_${key}`, serialized);
-      localStorage.setItem(`mirai_cache_${key}`, serialized);
+      sessionStorage.setItem(`pilot_cache_${key}`, serialized);
+      localStorage.setItem(`pilot_cache_${key}`, serialized);
     } catch {
       // Ignore quota errors
     }
@@ -97,14 +97,14 @@ export function invalidateCache(urlPattern?: string) {
         const keysToRemove: string[] = [];
         for (let i = 0; i < sessionStorage.length; i++) {
           const k = sessionStorage.key(i);
-          if (k && k.startsWith("mirai_cache_")) keysToRemove.push(k);
+          if (k && k.startsWith("pilot_cache_")) keysToRemove.push(k);
         }
         keysToRemove.forEach((k) => sessionStorage.removeItem(k));
 
         const lsKeysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
-          if (k && k.startsWith("mirai_cache_")) lsKeysToRemove.push(k);
+          if (k && k.startsWith("pilot_cache_")) lsKeysToRemove.push(k);
         }
         lsKeysToRemove.forEach((k) => localStorage.removeItem(k));
       } catch {}
@@ -123,14 +123,14 @@ export function invalidateCache(urlPattern?: string) {
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i++) {
         const k = sessionStorage.key(i);
-        if (k && k.startsWith("mirai_cache_") && k.includes(urlPattern)) keysToRemove.push(k);
+        if (k && k.startsWith("pilot_cache_") && k.includes(urlPattern)) keysToRemove.push(k);
       }
       keysToRemove.forEach((k) => sessionStorage.removeItem(k));
 
       const lsKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith("mirai_cache_") && k.includes(urlPattern)) lsKeysToRemove.push(k);
+        if (k && k.startsWith("pilot_cache_") && k.includes(urlPattern)) lsKeysToRemove.push(k);
       }
       lsKeysToRemove.forEach((k) => localStorage.removeItem(k));
     } catch {}

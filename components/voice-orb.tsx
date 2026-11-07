@@ -17,7 +17,7 @@ export function VoiceOrb({
   state = "idle",
   audioLevel = 0,
   size = 150,
-  examinerName = "Mirai AI",
+  examinerName = "AI Examiner",
   className = "",
 }: VoiceOrbProps) {
   const stateConfig = {
