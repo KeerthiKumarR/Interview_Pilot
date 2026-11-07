@@ -294,6 +294,8 @@ export function InterviewClient({
         } catch {}
       }
     } finally {
+      stopAllTTSAudio();
+      stopSpeaking();
       store.setStatus("completed");
       router.replace(`/report/${interview.id}`);
     }
@@ -802,6 +804,8 @@ export function InterviewClient({
 
     return () => {
       stopTTS();
+      stopAllTTSAudio();
+      stopSpeaking();
       useInterviewStore.getState().reset();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

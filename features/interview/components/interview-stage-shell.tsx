@@ -38,6 +38,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MiraiLogo } from "@/components/mirai-logo";
 import { VoiceOrb } from "@/components/voice-orb";
 import { stopAllTTSAudio } from "@/hooks/use-tts";
+import { stopSpeaking } from "@/hooks/use-web-speech";
 import { cleanInterviewChatText } from "@/lib/utils";
 
 export interface InterviewStageShellProps {
@@ -589,6 +590,7 @@ export function InterviewStageShell({
     // 1. Immediately pause/stop agent speech & generation so user isn't talked over
     onStopGeneration?.();
     stopAllTTSAudio();
+    stopSpeaking();
     setShowEndModal(true);
   }, [onStopGeneration]);
 
@@ -598,6 +600,7 @@ export function InterviewStageShell({
     // 1. Immediately stop agent generation & audio
     onStopGeneration?.();
     stopAllTTSAudio();
+    stopSpeaking();
 
     // 2. Immediately stop local microphone recognition & audio processing
     try {

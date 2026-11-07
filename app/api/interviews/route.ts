@@ -299,7 +299,11 @@ ${projectSections.length > 0 ? projectSections.join("\n") + "\n\n---\n" : ""}
     }
 
     // Pre-create the personalized assistant opening greeting message so it is instantly available in 0ms
-    const roleName = studentProfile?.targetRole || (isBehavioral ? "HR & Behavioral Competency" : "Software Engineer");
+    const roleName = (body.targetRole as string) || studentProfile?.targetRole || (isBehavioral ? "HR & Behavioral Competency" : "Software Engineer");
+    const targetCompany = body.company as string | undefined;
+    if (targetCompany && body.targetRole) {
+      problemTitle = `${targetCompany} Technical Viva: ${body.targetRole}`;
+    }
     const primaryProj = (projectId && studentProfile?.projects?.find((p) => p.id === projectId)) || studentProfile?.projects?.[0];
     const firstProject = primaryProj?.title?.trim();
     const topSkills = Array.isArray(studentProfile?.skills) && studentProfile.skills.length > 0

@@ -14,11 +14,13 @@ import {
   ChevronUp,
   Globe,
   Briefcase,
+  Volume2,
 } from "lucide-react";
 import { useNavigationLoading } from "@/components/navigation-loading-provider";
 import { Badge } from "@/components/ui/badge";
 import { readCache, writeCache } from "@/lib/client-cache";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
+import { speakTestBackend, stopAllTTSAudio } from "@/hooks/use-tts";
 
 const REGIONAL_SPOKEN_LANGUAGES = [
   { code: "en-IN", label: "English (India)", native: "Indic Accent" },
@@ -34,6 +36,9 @@ const REGIONAL_SPOKEN_LANGUAGES = [
 
 interface StartInterviewModalProps {
   onClose: () => void;
+  initialJobRole?: string;
+  initialCompany?: string;
+  initialSkills?: string[];
 }
 
 interface RoleOption {
@@ -99,12 +104,38 @@ const DIFFICULTY_OPTIONS = [
   { value: "hard", label: "FAANG", hint: "Hard" },
 ] as const;
 
+export const EXAMINER_OPTIONS = [
+  {
+    id: "gnani_nalini",
+    name: "Nalini",
+    gender: "female",
+    roleTitle: "Senior Staff Systems Architect",
+    badge: "Female Examiner · Recommended",
+    description: "Deep on distributed architecture, API contracts, and real-world system trade-offs.",
+    sampleText: "Hi, I'm Nalini, and I'll be conducting your technical placement viva today.",
+  },
+  {
+    id: "gnani_arun",
+    name: "Arun",
+    gender: "male",
+    roleTitle: "Principal Engineering Lead",
+    badge: "Male Examiner",
+    description: "Incisive on code modularity, edge cases, caching, and production scaling.",
+    sampleText: "Hi, I'm Arun, and I'll be conducting your technical placement viva today.",
+  },
+] as const;
+
 /**
  * High-Confidence, Zero-Friction Placement Viva Launchpad.
  * Automatically anchors the viva to the student's target role, verified resume,
  * and live project demo without forcing redundant developer configuration.
  */
-export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
+export function StartInterviewModal({
+  onClose,
+  initialJobRole,
+  initialCompany,
+  initialSkills,
+}: StartInterviewModalProps) {
   const router = useRouter();
   const { startNavigation } = useNavigationLoading();
 
@@ -116,6 +147,37 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
   const [duration, setDuration] = useState<number>(15);
   const [difficulty, setDifficulty] = useState<string>("medium");
   const [language, setLanguage] = useState<string>("javascript");
+
+  // Examiner Voice & Persona selection
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("interview_pilot_voice_id");
+      if (saved) return saved;
+    }
+    return useInterviewStore.getState().selectedVoiceId || "gnani_nalini";
+  });
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+
+  const handlePreviewVoice = async (voiceId: string, sampleText: string) => {
+    try {
+      if (previewingVoiceId) {
+        stopAllTTSAudio();
+        setPreviewingVoiceId(null);
+        return;
+      }
+      setPreviewingVoiceId(voiceId);
+      await speakTestBackend(
+        sampleText,
+        voiceId,
+        "preview",
+        () => setPreviewingVoiceId(null),
+        () => setPreviewingVoiceId(null),
+        "en-IN"
+      );
+    } catch {
+      setPreviewingVoiceId(null);
+    }
+  };
 
   // Optional language override toggle
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
@@ -275,7 +337,9 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
           personalizeWithProfile: true, // Always automatically anchored to verified profile
           provider: "hosted", // Fast high-throughput cloud inference (Groq)
           projectId: selectedProjectId || undefined,
-          voiceId: useInterviewStore.getState().selectedVoiceId || "gnani_nalini",
+          targetRole: initialJobRole || undefined,
+          company: initialCompany || undefined,
+          voiceId: selectedVoiceId,
           spokenLanguage,
         }),
       });
@@ -287,12 +351,14 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
 
       const data = await response.json();
       useInterviewStore.getState().setSttLanguage(spokenLanguage);
+      useInterviewStore.getState().setSelectedVoiceId(selectedVoiceId);
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("interview_pilot_stt_lang", spokenLanguage);
+          localStorage.setItem("interview_pilot_voice_id", selectedVoiceId);
         } catch {}
       }
-      const targetUrl = `/interview/${data.interview.id}?lang=${encodeURIComponent(spokenLanguage)}`;
+      const targetUrl = `/interview/${data.interview.id}?lang=${encodeURIComponent(spokenLanguage)}&voice=${encodeURIComponent(selectedVoiceId)}`;
       startNavigation(targetUrl);
       router.push(targetUrl);
     } catch (err) {
@@ -307,7 +373,9 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
   const detectedSkills = Array.isArray(studentProfile?.skills)
     ? (studentProfile?.skills as string[])
     : [];
-  const targetRole = studentProfile?.targetRole || "Full Stack Developer";
+  const targetRole = initialJobRole
+    ? (initialCompany ? `${initialJobRole} (${initialCompany})` : initialJobRole)
+    : (studentProfile?.targetRole || "Full Stack Developer");
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
@@ -526,6 +594,95 @@ export function StartInterviewModal({ onClose }: StartInterviewModalProps) {
                       {track.description}
                     </p>
                   </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          {/* Section: Select AI Examiner Persona (Male / Female) */}
+          <fieldset>
+            <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5">
+                <UserCheck className="size-3.5 text-primary" />
+                <span>Examiner Persona (Gender &amp; Voice)</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-normal">Choose Male or Female</span>
+            </legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {EXAMINER_OPTIONS.map((examiner) => {
+                const isSelected = selectedVoiceId === examiner.id;
+                const isPreviewing = previewingVoiceId === examiner.id;
+                return (
+                  <div
+                    key={examiner.id}
+                    onClick={() => {
+                      setSelectedVoiceId(examiner.id);
+                      useInterviewStore.getState().setSelectedVoiceId(examiner.id);
+                      if (typeof window !== "undefined") {
+                        try {
+                          localStorage.setItem("interview_pilot_voice_id", examiner.id);
+                        } catch {}
+                      }
+                    }}
+                    className={`flex flex-col justify-between p-3.5 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? "border-primary bg-primary/10 ring-1 ring-primary shadow-xs"
+                        : "border-border hover:border-foreground/30 bg-card hover:bg-muted/30"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between w-full">
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                          isSelected ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                        }`}>
+                          {examiner.badge}
+                        </span>
+                        {isSelected && (
+                          <Check className="size-3.5 text-primary shrink-0 ml-1" />
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className={`size-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                          examiner.gender === "female"
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                            : "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+                        }`}>
+                          {examiner.name[0]}
+                        </div>
+                        <div>
+                          <h4 className={`text-xs font-bold leading-tight ${
+                            isSelected ? "text-primary" : "text-foreground"
+                          }`}>
+                            {examiner.name}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground leading-none mt-0.5">
+                            {examiner.roleTitle}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="mt-2 text-[11px] text-muted-foreground leading-snug">
+                        {examiner.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-border/50 flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground font-medium">Gnani Timbre</span>
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePreviewVoice(examiner.id, examiner.sampleText);
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                      >
+                        <Volume2 className={`size-3 ${isPreviewing ? "animate-pulse text-emerald-500" : ""}`} />
+                        <span>{isPreviewing ? "Playing..." : "Hear Sample"}</span>
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>

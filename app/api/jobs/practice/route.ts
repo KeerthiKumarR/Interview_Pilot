@@ -46,36 +46,11 @@ Speak naturally into your microphone when the interviewer introduces themselves.
 
     const starterCode = getVivaStarterCode(language, `${company} - ${jobTitle}`, "System Architecture", skillsStr);
 
-    // Upsert or locate a dedicated JobRole for this company and position
-    const cleanCompany = company.trim();
-    const cleanTitle = jobTitle.trim();
-    const roleSlug = `job-${cleanCompany}-${cleanTitle}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60);
+    const voiceId = (body.voiceId as string | undefined) || "gnani_nalini";
+    const isMale = voiceId.includes("arun") || voiceId.includes("male");
+    const examinerName = isMale ? "Arun" : "Nalini";
 
-    let jobRole = null;
-    try {
-      jobRole = await prisma.jobRole.upsert({
-        where: { slug: roleSlug },
-        update: {
-          title: cleanTitle,
-          targetSkills: skillsStr,
-          description: `${cleanCompany} Technical Placement Viva focusing on ${skillsStr}`,
-        },
-        create: {
-          slug: roleSlug,
-          title: cleanTitle,
-          targetSkills: skillsStr,
-          description: `${cleanCompany} Technical Placement Viva focusing on ${skillsStr}`,
-          department: "Engineering",
-          level: "Mid-Level",
-        },
-      });
-    } catch (roleErr) {
-      console.warn("Could not upsert JobRole, continuing with problemTitle:", roleErr);
-    }
+    const openingMessage = `Hi! I'm ${examinerName}, and I'll be conducting your technical viva for the ${jobTitle} position at ${company} today. To kick things off with Stage 1, please introduce yourself and tell me what excites you about this role.`;
 
     const interview = await prisma.interview.create({
       data: {
@@ -85,17 +60,22 @@ Speak naturally into your microphone when the interviewer introduces themselves.
         duration: 20,
         status: "setup",
         style: "standard",
-        jobRoleId: jobRole?.id || null,
         problemTitle,
         problemDescription,
         code: starterCode,
+        messages: {
+          create: {
+            role: "assistant",
+            content: openingMessage,
+          },
+        },
       },
     });
 
     return NextResponse.json({
       success: true,
       interviewId: interview.id,
-      url: `/interview/${interview.id}`,
+      url: `/interview/${interview.id}?voice=${encodeURIComponent(voiceId)}`,
     });
   } catch (err: any) {
     console.error("Error creating job practice interview:", err);

@@ -21,6 +21,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StartInterviewModal } from "@/features/interview/components/start-interview-modal";
 
 export interface JobItem {
   id: string;
@@ -55,35 +56,8 @@ interface JobCardProps {
 export function JobCard({ job, onUpdateStatus }: JobCardProps) {
   const router = useRouter();
   const [updating, setUpdating] = useState(false);
-  const [startingPractice, setStartingPractice] = useState(false);
+  const [showPracticeModal, setShowPracticeModal] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(job.applicationStatus || "None");
-
-  const handleStartPractice = async () => {
-    try {
-      setStartingPractice(true);
-      const res = await fetch("/api/jobs/practice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobTitle: job.title,
-          company: job.company,
-          requiredSkills: job.requiredSkills,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to create practice interview");
-      }
-
-      const data = await res.json();
-      if (data.url) {
-        router.push(data.url);
-      }
-    } catch (err) {
-      console.error("Error starting practice viva:", err);
-      setStartingPractice(false);
-    }
-  };
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -261,21 +235,11 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
             <Button
               size="sm"
               variant="outline"
-              disabled={startingPractice}
-              onClick={handleStartPractice}
+              onClick={() => setShowPracticeModal(true)}
               className="h-8 gap-1.5 text-xs font-semibold hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
             >
-              {startingPractice ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Launching Viva...</span>
-                </>
-              ) : (
-                <>
-                  <PlayCircle className="h-3.5 w-3.5 text-primary" />
-                  <span>Practice Viva for this Job</span>
-                </>
-              )}
+              <PlayCircle className="h-3.5 w-3.5 text-primary" />
+              <span>Practice Viva for this Job</span>
             </Button>
 
             <a
@@ -290,6 +254,15 @@ export function JobCard({ job, onUpdateStatus }: JobCardProps) {
           </div>
         </div>
       </div>
+
+      {showPracticeModal && (
+        <StartInterviewModal
+          onClose={() => setShowPracticeModal(false)}
+          initialJobRole={job.title}
+          initialCompany={job.company}
+          initialSkills={job.requiredSkills}
+        />
+      )}
     </div>
   );
 }

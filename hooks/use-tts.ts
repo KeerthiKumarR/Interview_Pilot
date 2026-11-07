@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { useInterviewStore } from "@/features/interview/store/interview-store";
 import { speak, getBestFemaleVoice, getBestMaleVoice, getVoiceGender } from "@/hooks/use-web-speech";
 
@@ -89,9 +89,39 @@ let activeAudioUrl: string | null = null;
 let globalActiveAudio: HTMLAudioElement | null = null;
 
 /**
+ * Global TTS Session ID — incremented whenever all audio is commanded to stop.
+ * In-flight async fetches check this ID and discard results if the session was invalidated.
+ */
+let globalTtsSessionId = 0;
+
+/**
+ * Global set tracking EVERY HTMLAudioElement currently created or playing.
+ * Ensures zero audio can play past interview end or page exit.
+ */
+const allActiveAudioInstances = new Set<HTMLAudioElement>();
+
+export function getGlobalTtsSessionId(): number {
+  return globalTtsSessionId;
+}
+
+/**
  * Stop all active TTS audio playback (both backend audio blobs and browser speech synthesis).
+ * Immediately disarms all active audio elements and invalidates any in-flight TTS fetches.
  */
 export function stopAllTTSAudio() {
+  globalTtsSessionId++;
+
+  for (const audio of allActiveAudioInstances) {
+    try {
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = "";
+    } catch {}
+  }
+  allActiveAudioInstances.clear();
+
   if (globalActiveAudio) {
     try {
       globalActiveAudio.onended = null;
@@ -158,7 +188,16 @@ export function detectLanguageFromScript(text: string, defaultLang: string = "en
   return defaultLang;
 }
 
-async function getOrFetchAudioUrl(text: string, voiceId: string, interviewId: string, languageOverride?: string): Promise<string> {
+async function getOrFetchAudioUrl(
+  text: string,
+  voiceId: string,
+  interviewId: string,
+  languageOverride?: string,
+  expectedSessionId?: number
+): Promise<string> {
+  if (expectedSessionId !== undefined && expectedSessionId !== globalTtsSessionId) {
+    return "";
+  }
   const clean = cleanTextForSpeech(text);
   if (!clean) return "";
 
@@ -177,18 +216,29 @@ async function getOrFetchAudioUrl(text: string, voiceId: string, interviewId: st
         body: JSON.stringify({ text: clean, voice: voiceId, language }),
       });
 
+      if (expectedSessionId !== undefined && expectedSessionId !== globalTtsSessionId) {
+        return "";
+      }
+
       if (!res.ok) {
         console.warn(`[useTTS] Backend TTS responded with status ${res.status}. Falling back to browser speech synthesis.`);
         return "";
       }
 
       const blob = await res.blob();
+      if (expectedSessionId !== undefined && expectedSessionId !== globalTtsSessionId) {
+        return "";
+      }
       url = URL.createObjectURL(blob);
       setInAudioCache(key, url);
     } catch (err) {
       console.warn("[useTTS] Failed to reach TTS API:", err);
       return "";
     }
+  }
+
+  if (expectedSessionId !== undefined && expectedSessionId !== globalTtsSessionId) {
+    return "";
   }
 
   return url;
@@ -297,28 +347,43 @@ async function speakBrowserFallback(
  * Gracefully falls back to browser speech if backend returns 403 or fails.
  */
 export async function speakTestBackend(text: string, voiceId: string, interviewId: string, onEnd?: () => void, onError?: () => void, languageOverride?: string) {
+  const currentSession = globalTtsSessionId;
   try {
     const activeVoiceId = voiceId || "gnani_nalini";
     const store = useInterviewStore.getState();
     const lang = languageOverride || store.sttLanguage || "en-IN";
-    const url = await getOrFetchAudioUrl(text, activeVoiceId, interviewId, lang);
+    const url = await getOrFetchAudioUrl(text, activeVoiceId, interviewId, lang, currentSession);
+    if (currentSession !== globalTtsSessionId) return null;
     if (!url) {
       await speakBrowserFallback(text, onEnd, onError, activeVoiceId);
       return null;
     }
     const audio = new Audio(url);
+    allActiveAudioInstances.add(audio);
     audio.playbackRate = await getActiveTtsSpeed();
     
     audio.onended = () => {
+      allActiveAudioInstances.delete(audio);
       if (onEnd) onEnd();
     };
     audio.onerror = () => {
-      speakBrowserFallback(text, onEnd, onError, activeVoiceId);
+      allActiveAudioInstances.delete(audio);
+      if (currentSession === globalTtsSessionId) {
+        speakBrowserFallback(text, onEnd, onError, activeVoiceId);
+      }
     };
     
+    if (currentSession !== globalTtsSessionId) {
+      audio.pause();
+      audio.src = "";
+      allActiveAudioInstances.delete(audio);
+      return null;
+    }
+
     await audio.play();
     return audio;
   } catch (e) {
+    if (currentSession !== globalTtsSessionId) return null;
     console.warn("Test audio backend failed, falling back to browser speech:", e);
     await speakBrowserFallback(text, onEnd, onError, voiceId);
     return null;
@@ -330,6 +395,7 @@ export async function speakTestBackend(text: string, voiceId: string, interviewI
  * Useful for one-off messages (e.g. welcome message, question prompts).
  */
 export async function speakBackend(text: string, interviewId: string, onEnd?: () => void, onError?: () => void, languageOverride?: string) {
+  const currentSession = globalTtsSessionId;
   try {
     const store = useInterviewStore.getState();
     const rawVoiceId = store.selectedVoiceId;
@@ -340,7 +406,8 @@ export async function speakBackend(text: string, interviewId: string, onEnd?: ()
     }
     const selectedVoiceId = resolveVoiceForText(rawVoiceId, clean);
     const lang = languageOverride || store.sttLanguage || "en-IN";
-    const url = await getOrFetchAudioUrl(clean, selectedVoiceId, interviewId, lang);
+    const url = await getOrFetchAudioUrl(clean, selectedVoiceId, interviewId, lang, currentSession);
+    if (currentSession !== globalTtsSessionId) return null;
     if (!url) {
       await speakBrowserFallback(clean, onEnd, onError, selectedVoiceId);
       return null;
@@ -348,21 +415,34 @@ export async function speakBackend(text: string, interviewId: string, onEnd?: ()
     const audio = new Audio(url);
     audio.playbackRate = getActiveTtsSpeed();
     globalActiveAudio = audio;
+    allActiveAudioInstances.add(audio);
     
     audio.onended = () => {
+      allActiveAudioInstances.delete(audio);
       if (globalActiveAudio === audio) globalActiveAudio = null;
       if (onEnd) onEnd();
     };
     audio.onerror = () => {
+      allActiveAudioInstances.delete(audio);
       if (globalActiveAudio === audio) {
         globalActiveAudio = null;
-        speakBrowserFallback(clean, onEnd, onError, selectedVoiceId);
+        if (currentSession === globalTtsSessionId) {
+          speakBrowserFallback(clean, onEnd, onError, selectedVoiceId);
+        }
       }
     };
     
+    if (currentSession !== globalTtsSessionId) {
+      audio.pause();
+      audio.src = "";
+      allActiveAudioInstances.delete(audio);
+      return null;
+    }
+
     await audio.play();
     return audio;
   } catch (e) {
+    if (currentSession !== globalTtsSessionId) return null;
     console.warn("Speak backend failed, falling back to browser speech:", e);
     const selectedVoiceId = useInterviewStore.getState().selectedVoiceId || "gnani_nalini";
     await speakBrowserFallback(cleanTextForSpeech(text), onEnd, onError, selectedVoiceId);
@@ -455,12 +535,18 @@ export function useTTS(): UseTTSResult {
     const language = store.sttLanguage || "en-IN";
 
     let createdAudio: HTMLAudioElement | null = null;
+    const currentSession = globalTtsSessionId;
 
     try {
       if (!interviewId) throw new Error("No interviewId active");
       store.setAIState("speaking");
 
-      const url = await getOrFetchAudioUrl(sentence, selectedVoiceId, interviewId, language);
+      const url = await getOrFetchAudioUrl(sentence, selectedVoiceId, interviewId, language, currentSession);
+      if (currentSession !== globalTtsSessionId || !isSpeakingRef.current) {
+        isSpeakingRef.current = false;
+        return;
+      }
+
       if (!url) {
         // Fallback to browser Web Speech API with gender matching
         await speakBrowserFallback(
@@ -469,16 +555,21 @@ export function useTTS(): UseTTSResult {
             isSpeakingRef.current = false;
             currentAudioRef.current = null;
             activeAudioUrl = null;
-            processNext();
+            if (currentSession === globalTtsSessionId) processNext();
           },
           () => {
             isSpeakingRef.current = false;
             currentAudioRef.current = null;
             activeAudioUrl = null;
-            processNext();
+            if (currentSession === globalTtsSessionId) processNext();
           },
           selectedVoiceId
         );
+        return;
+      }
+
+      if (currentSession !== globalTtsSessionId || !isSpeakingRef.current) {
+        isSpeakingRef.current = false;
         return;
       }
 
@@ -489,43 +580,61 @@ export function useTTS(): UseTTSResult {
       if (ttsQueueRef.current.length > 0) {
         const nextSentence = cleanTextForSpeech(ttsQueueRef.current[0]);
         if (nextSentence && nextSentence.length >= 2) {
-          getOrFetchAudioUrl(nextSentence, selectedVoiceId, interviewId, language).catch(() => {});
+          getOrFetchAudioUrl(nextSentence, selectedVoiceId, interviewId, language, currentSession).catch(() => {});
         }
       }
 
       const audio = new Audio(url);
+      allActiveAudioInstances.add(audio);
       audio.playbackRate = await getActiveTtsSpeed();
       createdAudio = audio;
       currentAudioRef.current = audio;
 
       audio.onended = () => {
+        allActiveAudioInstances.delete(audio);
         isSpeakingRef.current = false;
         currentAudioRef.current = null;
         activeAudioUrl = null;
-        processNext();
+        if (currentSession === globalTtsSessionId) {
+          processNext();
+        }
       };
 
       audio.onerror = () => {
+        allActiveAudioInstances.delete(audio);
         if (currentAudioRef.current !== audio) return; // Disarmed if stopped or replaced
         currentAudioRef.current = null;
         activeAudioUrl = null;
-        console.warn("Audio playback error, falling back to browser speech");
-        speakBrowserFallback(
-          sentence,
-          () => {
-            isSpeakingRef.current = false;
-            processNext();
-          },
-          () => {
-            isSpeakingRef.current = false;
-            processNext();
-          },
-          selectedVoiceId
-        );
+        if (currentSession === globalTtsSessionId && isSpeakingRef.current) {
+          console.warn("Audio playback error, falling back to browser speech");
+          speakBrowserFallback(
+            sentence,
+            () => {
+              isSpeakingRef.current = false;
+              if (currentSession === globalTtsSessionId) processNext();
+            },
+            () => {
+              isSpeakingRef.current = false;
+              if (currentSession === globalTtsSessionId) processNext();
+            },
+            selectedVoiceId
+          );
+        }
       };
+
+      if (currentSession !== globalTtsSessionId || !isSpeakingRef.current) {
+        audio.pause();
+        audio.src = "";
+        allActiveAudioInstances.delete(audio);
+        isSpeakingRef.current = false;
+        return;
+      }
 
       await audio.play();
     } catch (e) {
+      if (currentSession !== globalTtsSessionId || !isSpeakingRef.current) {
+        return;
+      }
       if (createdAudio && currentAudioRef.current !== createdAudio) {
         return; // Session stopped or interrupted, do not play robotic fallback
       }
@@ -536,13 +645,13 @@ export function useTTS(): UseTTSResult {
           isSpeakingRef.current = false;
           currentAudioRef.current = null;
           activeAudioUrl = null;
-          processNext();
+          if (currentSession === globalTtsSessionId) processNext();
         },
         () => {
           isSpeakingRef.current = false;
           currentAudioRef.current = null;
           activeAudioUrl = null;
-          processNext();
+          if (currentSession === globalTtsSessionId) processNext();
         },
         selectedVoiceId
       );
@@ -656,6 +765,12 @@ export function useTTS(): UseTTSResult {
     ttsQueueRef.current = [];
     isSpeakingRef.current = false;
     isDoneStreamingRef.current = false;
+  }, [stopSpeaking]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
   }, [stopSpeaking]);
 
   return {

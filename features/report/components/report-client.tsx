@@ -6,6 +6,8 @@ import { getScoreColor } from "@/lib/utils";
 import { FeedbackButton } from "@/features/feedback/components/feedback-button";
 import { MessageContent } from "@/features/interview/components/message-content";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { stopAllTTSAudio } from "@/hooks/use-tts";
+import { stopSpeaking } from "@/hooks/use-web-speech";
 
 import {
   Award,
@@ -19,8 +21,8 @@ import {
   BookOpen,
   ChevronRight,
   Layers,
+  Briefcase,
 } from "lucide-react";
-import { MatchedJobsSection } from "./matched-jobs-section";
 
 // ─── Staged Report Progress ─────────────────
 
@@ -138,8 +140,6 @@ interface ReportClientProps {
     code: string;
     style: string;
     createdAt: string;
-    jobRole?: { title: string } | null;
-    role?: string | null;
   };
   report: ReportData | null;
   messageCount: number;
@@ -173,6 +173,12 @@ export function ReportClient({
   const [showCode, setShowCode] = useState(false);
 
   const generatingRef = useRef(false);
+
+  // Ensure all lingering audio, speech synthesis, and background timers are unconditionally silenced on mount
+  useEffect(() => {
+    stopAllTTSAudio();
+    stopSpeaking();
+  }, []);
 
   // Auto-generate report if not present
   useEffect(() => {
@@ -769,13 +775,6 @@ export function ReportClient({
             </div>
           )}
 
-          {/* Matched Jobs Section (Driven by Profile, Resume & Viva Score) */}
-          <MatchedJobsSection
-            interviewId={interview.id}
-            overallScore={report.overallScore}
-            targetRole={interview.jobRole?.title || interview.role || interview.problemTitle}
-          />
-
           {/* Final Submitted Code Implementation */}
           {interview.code && interview.code.trim().length > 0 && (
             <div className="mt-6 border-t border-border pt-6">
@@ -872,12 +871,19 @@ export function ReportClient({
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-3 border-t border-border pt-6 mt-4">
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-6 mt-4">
             <Link
               href="/dashboard"
               className="h-9 rounded-md bg-secondary px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary/80 inline-flex items-center"
             >
               Back to Dashboard
+            </Link>
+            <Link
+              href="/dashboard/jobs"
+              className="h-9 rounded-md border border-purple-500/30 bg-purple-500/10 px-4 text-sm font-semibold text-purple-600 dark:text-purple-400 transition-colors hover:bg-purple-500/20 inline-flex items-center gap-1.5"
+            >
+              <Briefcase className="h-4 w-4" />
+              <span>Explore Matched Jobs</span>
             </Link>
             <Link
               href="/dashboard"
